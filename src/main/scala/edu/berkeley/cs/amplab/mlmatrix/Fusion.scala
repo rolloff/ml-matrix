@@ -84,9 +84,12 @@ object Fusion extends Logging with Serializable {
     errPercent
   }
 
-  def topKClassifier(k: Int, in: RDD[DenseVector[Double]]) : RDD[Array[Int]] = {
+  def topKClassifier(k: Int, in: RDD[Array[Double]]) : RDD[Array[Int]] = {
     // Returns top k indices with maximum value
-    in.map { ary => argtopk(ary, k).toArray}
+    in.map { ary =>
+      ary.toSeq.zipWithIndex.sortBy(_._1).takeRight(k).map(_._2).toArray
+    }
+    // in.map { ary => argtopk(ary, k).toArray }
   }
 
 
@@ -111,8 +114,10 @@ object Fusion extends Logging with Serializable {
     }
 
     // Fuse b matrices
-    val fusedPrediction = daisyPrediction.zip(lcsPrediction).map { p =>
-      (p._1*daisyWt + p._2*lcsWt).toDenseVector
+    val fusedPrediction = daisyPrediction.zip(lcsPrediction).flatMap { p =>
+      val fused = (p._1*daisyWt + p._2*lcsWt)
+      // Convert from DenseMatrix to Array[Array[Double]]
+      fused.data.grouped(fused.rows).toSeq.transpose.map(x => x.toArray)
     }
 
     val predictedLabels = topKClassifier(5, fusedPrediction)
@@ -172,32 +177,38 @@ object Fusion extends Logging with Serializable {
 
     // Load data as RowPartitionedMatrices
     val daisyTrainRDD = loadMatrixFromFile(sc, daisyTrainFilename)
-    val daisyTest = RowPartitionedMatrix.fromArray(loadMatrixFromFile(sc, daisyTestFilename))
+    val daisyTestRDD = loadMatrixFromFile(sc, daisyTestFilename)
     val daisyBRDD = loadMatrixFromFile(sc, daisyBFilename)
 
 
     val lcsTrainRDD = loadMatrixFromFile(sc, lcsTrainFilename)
-    val lcsTest = RowPartitionedMatrix.fromArray(loadMatrixFromFile(sc, lcsTestFilename))
+    var lcsTestRDD = loadMatrixFromFile(sc, lcsTestFilename)
     val lcsBRDD = loadMatrixFromFile(sc, lcsBFilename)
 
-    // Load text file as array of ints
-    var imagenetTestLabels: RDD[Array[Int]] = sc.textFile(imagenetTestLabelsFilename).map(line=>line.split(",")).map(x =>
-      x.map(y=> y.toInt))
     println("Creating coalescer")
-    val coalescer = Utils.createCoalescer(daisyTrainRDD, 16)
-    val daisyTrain = RowPartitionedMatrix.fromArray(coalescer(daisyTrainRDD))
-    val daisyB = RowPartitionedMatrix.fromArray(coalescer(daisyBRDD))
+    val coalescer = Utils.createCoalescer(daisyTrainRDD, 4)
+    val daisyTrain = RowPartitionedMatrix.fromArray(coalescer(daisyTrainRDD)).cache()
+    val daisyB = RowPartitionedMatrix.fromArray(coalescer(daisyBRDD)).cache()
     println("daisyB and daisyTrain coalesced")
-    val lcsTrain = RowPartitionedMatrix.fromArray(coalescer(lcsTrainRDD))
-    val lcsB = RowPartitionedMatrix.fromArray(coalescer(lcsBRDD))
+    val lcsTrain = RowPartitionedMatrix.fromArray(coalescer(lcsTrainRDD)).cache()
+    val lcsB = RowPartitionedMatrix.fromArray(coalescer(lcsBRDD)).cache()
     println("Done coalescing lcs and daisy")
-    imagenetTestLabels = coalescer(imagenetTestLabels)
+
+    // Load text file as array of ints
+    val imagenetTestLabelsRDD: RDD[Array[Int]] = sc.textFile(imagenetTestLabelsFilename).map { line =>
+      line.split(",")
+    }.map { x =>
+      x.map(y => y.toInt)
+    }
+
+    // Create a new coalescer for test data.
+    // NOTE: We need to do this as test data has different number of entries per partition
+    val testCoalescer = Utils.createCoalescer(daisyTestRDD, 4)
+    val daisyTest = RowPartitionedMatrix.fromArray(testCoalescer(daisyTestRDD)).cache()
+    val lcsTest = RowPartitionedMatrix.fromArray(testCoalescer(lcsTestRDD)).cache()
+    // NOTE: Test labels is partitioned the same way as test features
+    val imagenetTestLabels = testCoalescer(imagenetTestLabelsRDD).cache()
     println("imageNet coalesced")
-
-
-
-
-
 
     // Solve for daisy x
     var begin = System.nanoTime()
@@ -226,9 +237,9 @@ object Fusion extends Logging with Serializable {
     // println("Condition number of lcsTest " + lcsTest.condEst())
     // println("SVDs of lcsTrain " + lcsTrain.svds().toArray.mkString(" "))
 
-    val daisyResidual= computeResidualNormWithL2(daisyTrain, daisyB, daisyX, lambda)
+    val daisyResidual = computeResidualNormWithL2(daisyTrain, daisyB, daisyX, lambda)
     val lcsResidual = computeResidualNormWithL2(lcsTrain, lcsB, lcsX, lambda)
-    println("Finished computing the residuals")
+    println("Finished computing the residuals " + daisyResidual + " " + lcsResidual)
 
     println("Condition number, residual norm, time")
     println("Daisy: ")
