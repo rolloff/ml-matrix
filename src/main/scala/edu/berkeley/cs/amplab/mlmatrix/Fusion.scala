@@ -219,6 +219,8 @@ object Fusion extends Logging with Serializable {
     lcsTrain.rdd.count
     lcsB.rdd.count
 
+    trainZipped.unpersist()
+
     // Load text file as array of ints
     val imagenetTestLabelsRDD = sc.textFile(imagenetTestLabelsFilename).map { line => 
       line.split(",").map(x => x.toInt)
@@ -241,6 +243,8 @@ object Fusion extends Logging with Serializable {
     lcsTest.rdd.count
     imagenetTestLabels.count
     println("imageNet coalesced")
+
+    testZipped.unpersist()
 
     // Solve for daisy x
     var begin = System.nanoTime()
