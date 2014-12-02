@@ -169,7 +169,6 @@ class TSQR extends RowPartitionedSolver with Logging with Serializable {
     val matrixParts = A.rdd.zip(b.rdd).map(x => (x._1.mat, x._2.mat))
     val qrTree = matrixParts.map { part =>
       val (aPart, bPart) = part
-      println("aPart is " + aPart.rows +  ", "+ aPart.cols)
       if (aPart.rows < aPart.cols) {
         (aPart, bPart)
       } else {

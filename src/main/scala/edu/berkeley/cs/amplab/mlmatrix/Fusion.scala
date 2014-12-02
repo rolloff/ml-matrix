@@ -69,9 +69,6 @@ object Fusion extends Logging with Serializable {
 
   def getErrPercent(predicted: RDD[Array[Int]], actual: RDD[Array[Int]], numTestImages: Int): Double = {
     // FIXME: Each image only has one actual label, so actual should be an RDD[Int]
-
-
-
     val totalErr = predicted.zip(actual).map({ case (topKLabels, actualLabel) =>
       if (topKLabels.contains(actualLabel(0))) {
         0.0
@@ -120,8 +117,7 @@ object Fusion extends Logging with Serializable {
       fused.data.grouped(fused.rows).toSeq.transpose.map(x => x.toArray)
     }
 
-    val predictedLabels = topKClassifier(5, fusedPrediction)
-    println("Got predicted labels ")
+    val predictedLabels = topKClassifier(10, fusedPrediction)
     val errPercent = getErrPercent(predictedLabels, actualLabels, numTestImages)
     errPercent
   }
@@ -175,24 +171,21 @@ object Fusion extends Logging with Serializable {
     // Actual labels from imagenet
     val imagenetTestLabelsFilename = directory + "imagenet-test-actual/"
 
-    // Load data as RowPartitionedMatrices
+    // load matrix RDDs
     val daisyTrainRDD = loadMatrixFromFile(sc, daisyTrainFilename)
     val daisyTestRDD = loadMatrixFromFile(sc, daisyTestFilename)
     val daisyBRDD = loadMatrixFromFile(sc, daisyBFilename)
-
 
     val lcsTrainRDD = loadMatrixFromFile(sc, lcsTrainFilename)
     var lcsTestRDD = loadMatrixFromFile(sc, lcsTestFilename)
     val lcsBRDD = loadMatrixFromFile(sc, lcsBFilename)
 
-    println("Creating coalescer")
+    // Use a coalescer to repartition data
     val coalescer = Utils.createCoalescer(daisyTrainRDD, 4)
     val daisyTrain = RowPartitionedMatrix.fromArray(coalescer(daisyTrainRDD)).cache()
     val daisyB = RowPartitionedMatrix.fromArray(coalescer(daisyBRDD)).cache()
-    println("daisyB and daisyTrain coalesced")
     val lcsTrain = RowPartitionedMatrix.fromArray(coalescer(lcsTrainRDD)).cache()
     val lcsB = RowPartitionedMatrix.fromArray(coalescer(lcsBRDD)).cache()
-    println("Done coalescing lcs and daisy")
 
     // Load text file as array of ints
     val imagenetTestLabelsRDD: RDD[Array[Int]] = sc.textFile(imagenetTestLabelsFilename).map { line =>
@@ -208,7 +201,7 @@ object Fusion extends Logging with Serializable {
     val lcsTest = RowPartitionedMatrix.fromArray(testCoalescer(lcsTestRDD)).cache()
     // NOTE: Test labels is partitioned the same way as test features
     val imagenetTestLabels = testCoalescer(imagenetTestLabelsRDD).cache()
-    println("imageNet coalesced")
+
 
     // Solve for daisy x
     var begin = System.nanoTime()
@@ -227,7 +220,6 @@ object Fusion extends Logging with Serializable {
 
     println("Finished solving for lcsX")
 
-    // FIXME: Residual norm needs to be calculated for regularized problem
 
     // Information about the spectrum of the matrices
     // println("Condition number of daisyTrain " + daisyTrain.condEst())
