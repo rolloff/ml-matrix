@@ -19,7 +19,7 @@ import org.apache.spark.SparkContext
 import org.apache.spark.SparkContext._
 
 
-object Fusion extends Logging with Serializable {
+object TIMIT extends Logging with Serializable {
 
 
   def solveForX(
@@ -69,18 +69,6 @@ object Fusion extends Logging with Serializable {
   }
 
 
-  // def textFileWithName(sc: SparkContext, filename: String) = {
-  //   sc.hadoopFile(filename, classOf[TextInputFormat], classOf[LongWritable],
-  //       classOf[Text]).asInstanceOf[HadoopRDD[LongWritable, Text]].mapPartitionsWithInputSplit { case (split, lineIter) =>
-  //     val fileSplit = split.asInstanceOf[FileSplit]
-  //     val name = fileSplit.getPath().getName()
-  //
-  //     lineIter.map { line =>
-  //       (name, line._2.toString)
-  //     }
-  //   }
-  // }
-
   def loadMatrixFromFile(sc: SparkContext, filename: String): RDD[Array[Double]] = {
     sc.textFile(filename).map { line =>
       line.split(",").map(y => y.toDouble)
@@ -110,38 +98,30 @@ object Fusion extends Logging with Serializable {
   }
 
 
-  def calcFusedTestErr(daisyTest: RowPartitionedMatrix, lcsTest: RowPartitionedMatrix,
-    daisyX: DenseMatrix[Double], lcsX: DenseMatrix[Double],
-    actualLabels: RDD[Array[Int]],
-    daisyWt: Double, lcsWt: Double): Double = {
+  def calcTestErr(test: RowPartitionedMatrix,
+    x: DenseMatrix[Double],
+    actualLabels: RDD[Array[Int]]): Double = {
 
     // Compute number of test images
-    val numTestImages = daisyTest.numRows().toInt
+    val numTestImages = test.numRows().toInt
 
     // Broadcast x
-    val daisyXBroadcast = daisyTest.rdd.context.broadcast(daisyX)
-    val lcsXBroadcast = lcsTest.rdd.context.broadcast(lcsX)
+    val xBroadcast = test.rdd.context.broadcast(x)
 
     // Calculate predictions
-    val daisyPrediction = daisyTest.rdd.map { mat =>
-      mat.mat * daisyXBroadcast.value
-    }
-    val lcsPrediction = lcsTest.rdd.map { mat =>
-      mat.mat * lcsXBroadcast.value
+    val prediction = test.rdd.map { mat =>
+      mat.mat * xBroadcast.value
     }
 
-    // Fuse b matrices
-    val fusedPrediction = daisyPrediction.zip(lcsPrediction).flatMap { p =>
-      val fused = (p._1*daisyWt + p._2*lcsWt)
-      // Convert from DenseMatrix to Array[Array[Double]]
-      fused.data.grouped(fused.rows).toSeq.transpose.map(x => x.toArray)
+    val predictionArray = prediction.flatMap { p =>
+      p.data.grouped(p.rows).toSeq.transpose.map(y => y.toArray)
     }
 
-    val predictedLabels = topKClassifier(10, fusedPrediction)
+    val predictedLabels = topKClassifier(10, predictionArray)
     val errPercent = getErrPercent(predictedLabels, actualLabels, numTestImages)
     errPercent
   }
-
+  
   def main(args: Array[String]) {
     if (args.length < 5) {
       println("Got args " + args.mkString(" "))
@@ -177,112 +157,72 @@ object Fusion extends Logging with Serializable {
     val sc = new SparkContext(conf)
 
     // Daisy filenames
-    val daisyTrainFilename = directory + "daisy-aPart1-1/"
-    val daisyTestFilename = directory + "daisy-testFeatures-test-1/"
-    val daisyBFilename = directory + "daisy-null-labels/"
-
-    // LCS filenames
-    val lcsTrainFilename = directory + "lcs-aPart1-1/"
-    val lcsTestFilename = directory + "lcs-testFeatures-test-1/"
-    val lcsBFilename = directory + "lcs-null-labels/"
+    val timitTrainFilename = directory + "timit-fft-aPart1-1/"
+    val timitTestFilename = directory + "timit-fft-testRPM-test-1/"
+    val timitBFilename = directory + "timit-fft-null-labels/"
 
     // Actual labels from imagenet
-    val imagenetTestLabelsFilename = directory + "imagenet-test-actual/"
+    val timitActualFilename = directory + "timit-actual/"
 
     // load matrix RDDs
-    val daisyTrainRDD = loadMatrixFromFile(sc, daisyTrainFilename)
-    val daisyTestRDD = loadMatrixFromFile(sc, daisyTestFilename)
-    val daisyBRDD = loadMatrixFromFile(sc, daisyBFilename)
-
-    val lcsTrainRDD = loadMatrixFromFile(sc, lcsTrainFilename)
-    var lcsTestRDD = loadMatrixFromFile(sc, lcsTestFilename)
-    val lcsBRDD = loadMatrixFromFile(sc, lcsBFilename)
-
-    // val coalescer = Utils.createCoalescer(daisyTrainRDD, parts)
-
-    var daisyZipped = daisyTrainRDD.zip(daisyBRDD)
-    var lcsZipped = lcsTrainRDD.zip(lcsBRDD)
-    val trainZipped = daisyZipped.zip(lcsZipped).repartition(parts).cache()
+    val timitTrainRDD = loadMatrixFromFile(sc, timitTrainFilename)
+    val timitTestRDD = loadMatrixFromFile(sc, timitTestFilename)
+    val timitBRDD = loadMatrixFromFile(sc, timitBFilename)
+    var timitZipped = timitTrainRDD.zip(timitBRDD).repartition(parts).cache()
 
     // Lets cache and assert a few things
-    trainZipped.count
+    timitZipped.count
 
-    val daisyTrain = RowPartitionedMatrix.fromArray(trainZipped.map(p => p._1._1)).cache()
-    val daisyB = RowPartitionedMatrix.fromArray(trainZipped.map(p => p._1._2)).cache()
-    val lcsTrain = RowPartitionedMatrix.fromArray(trainZipped.map(p => p._2._1)).cache()
-    val lcsB = RowPartitionedMatrix.fromArray(trainZipped.map(p => p._2._2)).cache()
+    val timitTrain = RowPartitionedMatrix.fromArray(timitZipped.map(p => p._1)).cache()
+    val timitB = RowPartitionedMatrix.fromArray(timitZipped.map(p => p._2)).cache()
 
-    daisyTrain.rdd.count
-    daisyB.rdd.count
-    lcsTrain.rdd.count
-    lcsB.rdd.count
+    timitTrain.rdd.count
+    timitB.rdd.count
 
-    trainZipped.unpersist()
 
     // Load text file as array of ints
-    val imagenetTestLabelsRDD = sc.textFile(imagenetTestLabelsFilename).map { line =>
+    val timitActualRDD = sc.textFile(timitActualFilename).map { line =>
       line.split(",").map(x => x.toInt)
     }
 
-    // Create a new coalescer for test data.
     // NOTE: We need to do this as test data has different number of entries per partition
-    // val testCoalescer = Utils.createCoalescer(daisyTestRDD, parts)
-    val testZipped = daisyTestRDD.zip(lcsTestRDD).zip(imagenetTestLabelsRDD).repartition(16).cache()
+    val testZipped = timitTestRDD.zip(timitActualRDD).repartition(16).cache()
 
     // Lets cache and assert a few things
     testZipped.count
 
-    val daisyTest = RowPartitionedMatrix.fromArray(testZipped.map(p => p._1._1)).cache()
-    val lcsTest = RowPartitionedMatrix.fromArray(testZipped.map(p => p._1._2)).cache()
+    val timitTest = RowPartitionedMatrix.fromArray(testZipped.map(p => p._1)).cache()
     // NOTE: Test labels is partitioned the same way as test features
+    val timitActual = testZipped.map(p => p._2).cache()
 
-    val imagenetTestLabels = testZipped.map(p => p._2).cache()
+    timitTest.rdd.count
+    timitActual.count
 
-    daisyTest.rdd.count
-    lcsTest.rdd.count
-    imagenetTestLabels.count
-    println("imageNet coalesced")
+    // FIXME: Unpersist RDDs right after we cache them?
 
-    testZipped.unpersist()
-
-    // Solve for daisy x
+    // Solve for timit x
     var begin = System.nanoTime()
-    val daisyX = solveForX(daisyTrain, daisyB, solver, lambda, numIterations, stepSize, miniBatchFraction)
+    val timitX = solveForX(timitTrain, timitB, solver, lambda, numIterations, stepSize, miniBatchFraction)
     var end = System.nanoTime()
     // Timing numbers are in ms
-    val daisyTime = (end - begin) / 1e6
+    val timitTime = (end - begin) / 1e6
 
-    println("Finished solving for daisy X ")
-
-    // Solve for lcs x
-    var begin2 = System.nanoTime()
-    val lcsX = solveForX(lcsTrain, lcsB, solver, lambda, numIterations, stepSize, miniBatchFraction)
-    var end2 = System.nanoTime()
-    val lcsTime = (end2 -begin2) /1e6
-
-    println("Finished solving for lcsX")
+    println("Finished solving for timit X ")
 
 
     // Information about the spectrum of the matrices
-    // println("Condition number of daisyTrain " + daisyTrain.condEst())
-    // println("Condition number of daisyTest " + daisyTest.condEst())
-    // println("Condition number of lcsTrain " + lcsTrain.condEst())
-    // println("Condition number of lcsTest " + lcsTest.condEst())
+    // println("Condition number of timitTrain " + timitTrain.condEst())
+    // println("Condition number of timitTest " + timitTest.condEst())
 
-    val daisyResidual = computeResidualNormWithL2(daisyTrain, daisyB, daisyX, lambda)
-    val lcsResidual = computeResidualNormWithL2(lcsTrain, lcsB, lcsX, lambda)
-    println("Finished computing the residuals " + daisyResidual + " " + lcsResidual)
+    val timitResidual = computeResidualNormWithL2(timitTrain, timitB, timitX, lambda)
+    println("Finished computing the residuals " + timitResidual)
 
     println("Condition number, residual norm, time")
-    val daisyR = daisyTrain.qrR()
-    println("Daisy: " + daisyTrain.condEst(Some(daisyR)) + " " + daisyResidual + " " + daisyTime)
-    //println("SVDs of daisyTrain " + daisyTrain.svds(Some(daisyR)).toArray.mkString(" "))
+    val timitR = timitTrain.qrR()
+    println("Timit: " + timitTrain.condEst(Some(timitR)) + " " + timitResidual + " " + timitTime)
+    println("SVDs of timitTrain " + timitTrain.svds(Some(timitR)).toArray.mkString(" "))
 
-    val lcsR = lcsTrain.qrR()
-    println("LCS: " + lcsTrain.condEst(Some(lcsR)) + " " + lcsResidual + " " + lcsTime)
-    //println("SVDs of lcsTrain " + lcsTrain.svds(Some(lcsR)).toArray.mkString(" "))
-
-    val testError = calcFusedTestErr(daisyTest, lcsTest, daisyX, lcsX, imagenetTestLabels, 0.5, 0.5)
+    val testError = calcTestErr(timitTest, timitX, timitActual)
     println(testError)
   }
 }

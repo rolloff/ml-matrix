@@ -27,23 +27,24 @@ class LeastSquaresGradientDescent(numIterations: Int, stepSize: Double,
   override def solveLeastSquares(A: RowPartitionedMatrix, b: RowPartitionedMatrix):
     DenseMatrix[Double] = {
 
-    if(b.numCols() != 1) {
-      throw new SparkException(
-        "Multiple right hand sides are not supported")
-    }
-
     // map RDD[RowPartition] to RDD[LabeledPoint]
     val data = A.rdd.zip(b.rdd).flatMap { x =>
       val feature_rows = x._1.mat.data.grouped(x._1.mat.rows).toSeq.transpose
-      var features = feature_rows.map(row => Vectors.dense(row.toArray))
+      val features = feature_rows.map(x => new DenseVector[Double](x.toArray))
       val label_rows = x._2.mat.data.grouped(x._2.mat.rows).toSeq.transpose
-      val labels = label_rows.map(row => row(0))
-      features.zip(labels).map(x => LabeledPoint(x._2, x._1))
+      val labels = label_rows.map(row => row.toArray)
+      labels.zip(features)
     }
 
     // Train(RDD[LabeledPoint], numIterations, stepSize, miniBatchFraction)
-    val model = LinearRegressionWithSGD.train(data, numIterations, stepSize, miniBatchFraction)
-    new DenseMatrix(A.numCols().toInt, b.numCols().toInt, model.weights.toArray)
+    val sgd = new MultiClassLinearRegressionWithSGD()
+    sgd.optimizer
+       .setNumIterations(numIterations)
+       .setStepSize(stepSize)
+       .setMiniBatchFraction(miniBatchFraction)
+       .setRegParam(0.0)
+    val model = sgd.run(data)
+    model.weights
   }
 
   def solveLeastSquaresWithManyL2(
@@ -51,24 +52,23 @@ class LeastSquaresGradientDescent(numIterations: Int, stepSize: Double,
       b: RowPartitionedMatrix,
       lambdas: Array[Double]): Seq[DenseMatrix[Double]] = {
 
-    if(b.numCols() != 1) {
-      throw new SparkException(
-        "Multiple right hand sides are not supported")
-    }
-
     lambdas.map { lambda =>
       val data = A.rdd.zip(b.rdd).flatMap { x =>
         val feature_rows = x._1.mat.data.grouped(x._1.mat.rows).toSeq.transpose
-        var features = feature_rows.map(row => Vectors.dense(row.toArray))
+        val features = feature_rows.map(x => new DenseVector[Double](x.toArray))
         val label_rows = x._2.mat.data.grouped(x._2.mat.rows).toSeq.transpose
-        val labels = label_rows.map(row => row(0))
-
-        features.zip(labels).map(x => LabeledPoint(x._2, x._1))
+        val labels = label_rows.map(row => row.toArray)
+        labels.zip(features)
       }
 
-      val model = RidgeRegressionWithSGD.train(data, numIterations, stepSize,
-        lambda, miniBatchFraction)
-      new DenseMatrix(A.numCols().toInt, b.numCols().toInt, model.weights.toArray)
+      val sgd = new MultiClassLinearRegressionWithSGD()
+      sgd.optimizer
+         .setNumIterations(numIterations)
+         .setStepSize(stepSize)
+         .setMiniBatchFraction(miniBatchFraction)
+         .setRegParam(lambda)
+      val model = sgd.run(data)
+      model.weights
     }
   }
 
@@ -77,15 +77,6 @@ class LeastSquaresGradientDescent(numIterations: Int, stepSize: Double,
       b: RDD[Seq[DenseMatrix[Double]]],
       lambdas: Array[Double]): Seq[DenseMatrix[Double]] = {
 
-    val multipleRHS = b.map { matSeq =>
-      matSeq.forall{ mat => mat.cols!=1}
-    }.reduce{ (a,b) => a & b}
-
-    if (multipleRHS) {
-      throw new SparkException(
-        "Multiple right hand sides are not supported"
-      )
-    }
     val lambdaWithIndex = lambdas.zipWithIndex
 
     lambdaWithIndex.map { lambdaI =>
@@ -98,16 +89,21 @@ class LeastSquaresGradientDescent(numIterations: Int, stepSize: Double,
         val bVector = x._2(bIndex)
         // TODO: Write a util function to convert breeze matrix to Array[Vector]
         val feature_rows = x._1.mat.data.grouped(x._1.mat.rows).toSeq.transpose
-        var features = feature_rows.map(row => Vectors.dense(row.toArray))
+        val features = feature_rows.map(x => new DenseVector[Double](x.toArray))
         val label_rows = bVector.data.grouped(bVector.rows).toSeq.transpose
-        val labels = label_rows.map(row => row(0))
-        features.zip(labels).map(x => LabeledPoint(x._2, x._1))
+        val labels = label_rows.map(row => row.toArray)
+        labels.zip(features)
       }
 
-      val model = RidgeRegressionWithSGD.train(data, numIterations, stepSize,
-        lambda, miniBatchFraction)
-      new DenseMatrix(A.numCols().toInt, model.weights.size / A.numCols().toInt,
-        model.weights.toArray)
+      val sgd = new MultiClassLinearRegressionWithSGD()
+      sgd.optimizer
+         .setNumIterations(numIterations)
+         .setStepSize(stepSize)
+         .setMiniBatchFraction(miniBatchFraction)
+         .setRegParam(lambda)
+      val model = sgd.run(data)
+
+      model.weights
     }
   }
 }
