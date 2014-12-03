@@ -28,14 +28,14 @@ object FusionBCD extends Logging with Serializable {
       b: RowPartitionedMatrix,
       solver: String,
       lambda: Double,
-      numIterations: Integer,
+      numIterationsSGD: Integer,
       stepSize: Double,
       miniBatchFraction: Double) = {
     solver.toLowerCase match {
       case "normal" =>
         new NormalEquations().solveLeastSquaresWithL2(A, b, lambda)
       case "sgd" =>
-        new LeastSquaresGradientDescent(numIterations, stepSize, miniBatchFraction).solveLeastSquaresWithL2(A, b, lambda)
+        new LeastSquaresGradientDescent(numIterationsSGD, stepSize, miniBatchFraction).solveLeastSquaresWithL2(A, b, lambda)
       case "tsqr" =>
         new TSQR().solveLeastSquaresWithL2(A, b, lambda)
       case "local" =>
@@ -49,12 +49,12 @@ object FusionBCD extends Logging with Serializable {
     }
   }
 
-  def getSolver(solver: String, numIterations: Int , stepSize: Double, miniBatchFraction: Double) = {
+  def getSolver(solver: String, numIterationsSGD: Int , stepSize: Double, miniBatchFraction: Double) = {
     solver.toLowerCase match {
       case "normal" =>
         new NormalEquations()
       case "sgd" =>
-        new LeastSquaresGradientDescent(numIterations.get, stepSize.get, miniBatchFraction.get)
+        new LeastSquaresGradientDescent(numIterationsSGD.get, stepSize.get, miniBatchFraction.get)
       case "tsqr" =>
         new TSQR()
       case _ =>
@@ -147,7 +147,7 @@ object FusionBCD extends Logging with Serializable {
   def main(args: Array[String]) {
     if (args.length < 5) {
       println("Got args " + args.mkString(" "))
-      println("Usage: Fusion <master> <data_dir> <parts> <solver: tsqr|normal|sgd|local> <lambda> [<stepsize> <numIters> <miniBatchFraction>]")
+      println("Usage: Fusion <master> <data_dir> <parts> <solver: tsqr|normal|sgd|local> <lambda> <numIterationsBCD> [<stepsize> <numIters> <miniBatchFraction>]")
       System.exit(0)
     }
     val sparkMaster = args(0)
@@ -157,18 +157,19 @@ object FusionBCD extends Logging with Serializable {
     val solver = args(3)
     // Lambda for regularization
     val lambda = args(4).toDouble
+    val numIterationsBCD = args(5).toInt
 
     var stepSize = 0.1
-    var numIterations = 10
+    var numIterationsSGD = 10
     var miniBatchFraction = 1.0
     if (solver == "sgd") {
-      if (args.length < 8) {
+      if (args.length < 9) {
         println("Usage: Fusion <master> <data_dir> <parts> <solver: tsqr|normal|sgd|local> <lambda> [<stepsize> <numIters> <miniBatchFraction>]")
         System.exit(0)
       } else {
-        stepSize = args(5).toDouble
-        numIterations = args(6).toInt
-        miniBatchFraction = args(7).toDouble
+        stepSize = args(6).toDouble
+        numIterationsSGD = args(7).toInt
+        miniBatchFraction = args(8).toDouble
       }
     }
 
@@ -254,12 +255,12 @@ object FusionBCD extends Logging with Serializable {
 
 
 
-    val rowPartitionedSolver = getSolver(solver, numIterations, stepSize, miniBatchFraction)
+    val rowPartitionedSolver = getSolver(solver, numIterationsSGD, stepSize, miniBatchFraction)
 
     // Solve for daisy x
     var begin = System.nanoTime()
     // returns Seq[Seq[DenseMatrix[Double]]]
-    val daisyXs = new BlockCoordinateDescent().solveLeastSquaresWithL2(daisyTrains, daisyB, Array(lambda), numIterations, rowPartitionedSolver).map(p => p(0))
+    val daisyXs = new BlockCoordinateDescent().solveLeastSquaresWithL2(daisyTrains, daisyB, Array(lambda), numIterationsBCD, rowPartitionedSolver).map(p => p(0))
     var end = System.nanoTime()
     // Timing numbers are in ms
     val daisyTime = (end - begin) / 1e6
@@ -268,7 +269,7 @@ object FusionBCD extends Logging with Serializable {
 
     // Solve for lcs x
     var begin2 = System.nanoTime()
-    val lcsXs = new BlockCoordinateDescent().solveLeastSquaresWithL2(daisyTrains, daisyB, Array(lambda), numIterations, rowPartitionedSolver).map(p => p(0))
+    val lcsXs = new BlockCoordinateDescent().solveLeastSquaresWithL2(daisyTrains, daisyB, Array(lambda), numIterationsBCD, rowPartitionedSolver).map(p => p(0))
     var end2 = System.nanoTime()
     val lcsTime = (end2 -begin2) /1e6
 

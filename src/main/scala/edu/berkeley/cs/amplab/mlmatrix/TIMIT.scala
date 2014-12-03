@@ -98,30 +98,30 @@ object TIMIT extends Logging with Serializable {
   }
 
 
-  def calcTestErr(timitTest: RowPartitionedMatrix,
-    timitX: DenseMatrix[Double],
+  def calcTestErr(test: RowPartitionedMatrix,
+    x: DenseMatrix[Double],
     actualLabels: RDD[Array[Int]]): Double = {
 
     // Compute number of test images
-    val numTestImages = timitTest.numRows().toInt
+    val numTestImages = test.numRows().toInt
 
     // Broadcast x
-    val timitXBroadcast = timitTest.rdd.context.broadcast(timitX)
+    val xBroadcast = test.rdd.context.broadcast(x)
 
     // Calculate predictions
-    val timitPrediction = timitTest.rdd.map { mat =>
-      mat.mat * timitXBroadcast.value
+    val prediction = test.rdd.map { mat =>
+      mat.mat * xBroadcast.value
     }
 
-    val timitPredictionArray = timitPrediction.flatMap { p =>
-      p.data.grouped(p.rows).toSeq.transpose.map(x => x.toArray)
+    val predictionArray = prediction.flatMap { p =>
+      p.data.grouped(p.rows).toSeq.transpose.map(y => y.toArray)
     }
 
-    val predictedLabels = topKClassifier(10, timitPredictionArray)
+    val predictedLabels = topKClassifier(10, predictionArray)
     val errPercent = getErrPercent(predictedLabels, actualLabels, numTestImages)
     errPercent
   }
-
+  
   def main(args: Array[String]) {
     if (args.length < 5) {
       println("Got args " + args.mkString(" "))

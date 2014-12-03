@@ -70,11 +70,11 @@ object Fusion extends Logging with Serializable {
 
 
   // def textFileWithName(sc: SparkContext, filename: String) = {
-  //   sc.hadoopFile(filename, classOf[TextInputFormat], classOf[LongWritable], 
+  //   sc.hadoopFile(filename, classOf[TextInputFormat], classOf[LongWritable],
   //       classOf[Text]).asInstanceOf[HadoopRDD[LongWritable, Text]].mapPartitionsWithInputSplit { case (split, lineIter) =>
   //     val fileSplit = split.asInstanceOf[FileSplit]
   //     val name = fileSplit.getPath().getName()
-  // 
+  //
   //     lineIter.map { line =>
   //       (name, line._2.toString)
   //     }
@@ -82,7 +82,7 @@ object Fusion extends Logging with Serializable {
   // }
 
   def loadMatrixFromFile(sc: SparkContext, filename: String): RDD[Array[Double]] = {
-    sc.textFile(filename).map { line => 
+    sc.textFile(filename).map { line =>
       line.split(",").map(y => y.toDouble)
     }
   }
@@ -110,7 +110,7 @@ object Fusion extends Logging with Serializable {
   }
 
 
-  def calcTestErr(daisyTest: RowPartitionedMatrix, lcsTest: RowPartitionedMatrix,
+  def calcFusedTestErr(daisyTest: RowPartitionedMatrix, lcsTest: RowPartitionedMatrix,
     daisyX: DenseMatrix[Double], lcsX: DenseMatrix[Double],
     actualLabels: RDD[Array[Int]],
     daisyWt: Double, lcsWt: Double): Double = {
@@ -204,7 +204,7 @@ object Fusion extends Logging with Serializable {
     var lcsZipped = lcsTrainRDD.zip(lcsBRDD)
     val trainZipped = daisyZipped.zip(lcsZipped).repartition(parts).cache()
 
-    // Lets cache and assert a few things 
+    // Lets cache and assert a few things
     trainZipped.count
 
     val daisyTrain = RowPartitionedMatrix.fromArray(trainZipped.map(p => p._1._1)).cache()
@@ -220,7 +220,7 @@ object Fusion extends Logging with Serializable {
     trainZipped.unpersist()
 
     // Load text file as array of ints
-    val imagenetTestLabelsRDD = sc.textFile(imagenetTestLabelsFilename).map { line => 
+    val imagenetTestLabelsRDD = sc.textFile(imagenetTestLabelsFilename).map { line =>
       line.split(",").map(x => x.toInt)
     }
 
@@ -229,13 +229,13 @@ object Fusion extends Logging with Serializable {
     // val testCoalescer = Utils.createCoalescer(daisyTestRDD, parts)
     val testZipped = daisyTestRDD.zip(lcsTestRDD).zip(imagenetTestLabelsRDD).repartition(16).cache()
 
-    // Lets cache and assert a few things 
+    // Lets cache and assert a few things
     testZipped.count
 
     val daisyTest = RowPartitionedMatrix.fromArray(testZipped.map(p => p._1._1)).cache()
     val lcsTest = RowPartitionedMatrix.fromArray(testZipped.map(p => p._1._2)).cache()
     // NOTE: Test labels is partitioned the same way as test features
-    
+
     val imagenetTestLabels = testZipped.map(p => p._2).cache()
 
     daisyTest.rdd.count
@@ -276,13 +276,13 @@ object Fusion extends Logging with Serializable {
     println("Condition number, residual norm, time")
     val daisyR = daisyTrain.qrR()
     println("Daisy: " + daisyTrain.condEst(Some(daisyR)) + " " + daisyResidual + " " + daisyTime)
-    println("SVDs of daisyTrain " + daisyTrain.svds(Some(daisyR)).toArray.mkString(" "))
+    //println("SVDs of daisyTrain " + daisyTrain.svds(Some(daisyR)).toArray.mkString(" "))
 
     val lcsR = lcsTrain.qrR()
     println("LCS: " + lcsTrain.condEst(Some(lcsR)) + " " + lcsResidual + " " + lcsTime)
-    println("SVDs of lcsTrain " + lcsTrain.svds(Some(lcsR)).toArray.mkString(" "))
+    //println("SVDs of lcsTrain " + lcsTrain.svds(Some(lcsR)).toArray.mkString(" "))
 
-    val testError = calcTestErr(daisyTest, lcsTest, daisyX, lcsX, imagenetTestLabels, 0.5, 0.5)
+    val testError = calcFusedTestErr(daisyTest, lcsTest, daisyX, lcsX, imagenetTestLabels, 0.5, 0.5)
     println(testError)
   }
 }
