@@ -112,36 +112,41 @@ object FusionBCD extends Logging with Serializable {
   }
 
 
-  def calcTestErr(daisyTest: RowPartitionedMatrix, lcsTest: RowPartitionedMatrix,
-    daisyX: DenseMatrix[Double], lcsX: DenseMatrix[Double],
+  def calcTestErr(daisyTests: Seq[RowPartitionedMatrix], lcsTests: Seq[RowPartitionedMatrix],
+    daisyXs: Seq[DenseMatrix[Double]], lcsXs: Seq[DenseMatrix[Double]],
     actualLabels: RDD[Array[Int]],
-    daisyWt: Double, lcsWt: Double): Double = {
+    daisyWt: Double, lcsWt: Double): DenseVector[Double] = {
 
     // Compute number of test images
-    val numTestImages = daisyTest.numRows().toInt
+    val l = daisyTests.length
+    var i = 0
+    val numTestImages = daisyTests(0).numRows().toInt
 
-    // Broadcast x
-    val daisyXBroadcast = daisyTest.rdd.context.broadcast(daisyX)
-    val lcsXBroadcast = lcsTest.rdd.context.broadcast(lcsX)
+    var runningSum : Option[RDD[Array[Double]]] = None
+    val testErrors = DenseVector.zeros[Double](l)
 
-    // Calculate predictions
-    val daisyPrediction = daisyTest.rdd.map { mat =>
-      mat.mat * daisyXBroadcast.value
+    while (i < l) {
+      val A = daisyTests(i)
+      val x = A.rdd.context.broadcast(daisyXs(i))
+      val B = lcsTests(i)
+      val y = B.rdd.context.broadcast(lcsXs(i))
+      val Ax = A.rdd.map( mat => mat.mat*x.value)
+      val By = B.rdd.map( mat => mat.mat*y.value)
+      val fusedPrediction = Ax.zip(By).flatMap { p =>
+         val fused = (p._1*daisyWt + p._2*lcsWt)
+         fused.data.grouped(fused.rows).toSeq.transpose.map(x => x.toArray)
+      }
+      if (runningSum.isEmpty) {
+        runningSum = Some(fusedPrediction)
+      } else {
+        runningSum = Some(runningSum.get.zip(fusedPrediction).map(p => p._1.zip(p._2).map( y =>
+          y._1 + y._2)))
+      }
+      val predictedLabels = topKClassifier(5, runningSum.get)
+      val errPercent = getErrPercent(predictedLabels, actualLabels, numTestImages)
+      testErrors(i) = errPercent
     }
-    val lcsPrediction = lcsTest.rdd.map { mat =>
-      mat.mat * lcsXBroadcast.value
-    }
-
-    // Fuse b matrices
-    val fusedPrediction = daisyPrediction.zip(lcsPrediction).flatMap { p =>
-      val fused = (p._1*daisyWt + p._2*lcsWt)
-      // Convert from DenseMatrix to Array[Array[Double]]
-      fused.data.grouped(fused.rows).toSeq.transpose.map(x => x.toArray)
-    }
-
-    val predictedLabels = topKClassifier(10, fusedPrediction)
-    val errPercent = getErrPercent(predictedLabels, actualLabels, numTestImages)
-    errPercent
+    testErrors
   }
 
   def main(args: Array[String]) {
@@ -193,21 +198,21 @@ object FusionBCD extends Logging with Serializable {
     val imagenetTestLabelsFilename = directory + "imagenet-test-actual/"
 
     // load matrix RDDs
-    var daisyTrainRDDs = daisyTrainFilenames.map {
+    val daisyTrainRDDs = daisyTrainFilenames.map {
       daisyTrainFilename => loadMatrixFromFile(sc, daisyTrainFilename)
     }
-    var daisyTestRDDs = daisyTestFilenames.map {
+    val daisyTestRDDs = daisyTestFilenames.map {
       daisyTestFilename => loadMatrixFromFile(sc, daisyTestFilename)
     }
-    var daisyBRDD = loadMatrixFromFile(sc, daisyBFilename)
+    val daisyBRDD = loadMatrixFromFile(sc, daisyBFilename)
 
-    var lcsTrainRDDs = lcsTrainFilenames.map {
+    val lcsTrainRDDs = lcsTrainFilenames.map {
       lcsTrainFilename => loadMatrixFromFile(sc, lcsTrainFilename)
     }
-    var lcsTestRDDs = lcsTestFilenames.map {
+    val lcsTestRDDs = lcsTestFilenames.map {
       lcsTestFilename => loadMatrixFromFile(sc, lcsTestFilename)
     }
-    var lcsBRDD = loadMatrixFromFile(sc, lcsBFilename)
+    val lcsBRDD = loadMatrixFromFile(sc, lcsBFilename)
 
 
     val hp = new HashPartitioner(parts)
@@ -243,7 +248,7 @@ object FusionBCD extends Logging with Serializable {
 
     val daisyTests = daisyTestRDDsPartitioned.map(p => RowPartitionedMatrix.fromArray(p.map(_._2)).cache())
     val lcsTests = lcsTestRDDsPartitioned.map(p => RowPartitionedMatrix.fromArray(p.map(_._2)).cache())
-    val imagenetTestLabel = imagenetTestLabelsRDDPartitioned.map(_._2).cache()
+    val imagenetTestLabels = imagenetTestLabelsRDDPartitioned.map(_._2).cache()
 
     // Unpersist the RDDs
     daisyTrains.map(daisyTrain => daisyTrain.rdd.unpersist())
@@ -293,13 +298,8 @@ object FusionBCD extends Logging with Serializable {
 
     println("DaisyTime, lcsTime " + (daisyTime, lcsTime))
 
-    val testErrors = ((daisyTests.zip(lcsTests)).zip(daisyXs.zip(lcsXs))).map { p =>
-      val daisyTest = p._1._1
-      val lcsTest = p._1._2
-      val daisyX = p._2._1
-      val lcsX = p._2._2
-      calcTestErr(daisyTest, lcsTest, daisyX, lcsX, imagenetTestLabel, 0.5, 0.5)
-    }
-  println("Test errors : " + testErrors.mkString(" "))
+    val testErrors = calcTestErr(daisyTests, lcsTests, daisyXs, lcsXs,
+      imagenetTestLabels, 0.5, 0.5)
+    println("Test errors : " + testErrors)
   }
 }
