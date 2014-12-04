@@ -117,6 +117,42 @@ class GradientDescent (private var gradient: Gradient, private var updater: Upda
  * Top-level method to run gradient descent.
  */
 object GradientDescent extends Logging {
+
+  def aggregateParts(part: Iterator[(Array[Double], DenseVector[Double])]) 
+      : Iterator[(DenseMatrix[Double], DenseMatrix[Double])] = {
+    val partSeq = part.toSeq
+    val numRows = partSeq.length
+    val numCols = partSeq(0)._2.length
+    val numClasses = partSeq(0)._1.length
+
+    val features = new Array[Double](numRows * numCols)
+    val labels = new Array[Double](numRows * numClasses)
+    // var numRows = 0
+    // var numCols = 0
+    // var numClasses = 0
+    var i = 0
+    var featuresPtr = 0
+    var labelsPtr = 0
+    while (i < numRows) {
+      val nextItem = partSeq(i)
+      System.arraycopy(nextItem._2.data, 0, features, featuresPtr, nextItem._2.length)
+      featuresPtr += nextItem._2.length
+      // features ++= nextItem._2.data
+      System.arraycopy(nextItem._1, 0, labels, labelsPtr, nextItem._1.length)
+      labelsPtr += nextItem._1.length
+
+      i += 1
+
+      // labels ++= nextItem._1
+      // numRows += 1
+      // numCols = nextItem._2.length
+      // numClasses = nextItem._1.length
+    }
+    val featuresMat = new DenseMatrix(numCols, numRows, features.toArray)
+    val labelsMat = new DenseMatrix(numClasses, numRows, labels.toArray)
+    Iterator.single((labelsMat.t, featuresMat.t))
+  }
+
   /**
    * Run stochastic gradient descent (SGD) in parallel using mini batches.
    * In each iteration, we sample a subset (fraction miniBatchFraction) of the total data
@@ -178,21 +214,30 @@ object GradientDescent extends Logging {
       val bcWeights = data.context.broadcast(weights)
       // Sample a subset (fraction miniBatchFraction) of the total data
       // compute and sum up the subgradients on this subset (this is one map-reduce)
-      val sampleData =  data.sample(false, miniBatchFraction, 42 + i)
+      val sampleData =  data.sample(false, miniBatchFraction, 123 + i).mapPartitions(aggregateParts)
+      // sampleData.cache().count
+
+      val depth = math.ceil(math.log(data.partitions.size)/math.log(2)).toInt
+
       val (gradientSum, lossSum, miniBatchSize) = 
         Utils.treeAggregate((DenseMatrix.zeros[Double](weights.rows, weights.cols), 0.0, 0L))(
           rdd = sampleData,
-          seqOp = (c, v: (Array[Double], DenseVector[Double])) => {
+          depth = depth,
+          seqOp = (c, v: (DenseMatrix[Double], DenseMatrix[Double])) => {
             // c: (grad, loss, count), v: (label, features)
             val l = gradient.compute(v._2, v._1, bcWeights.value, c._1)
-            (c._1, c._2 + l, c._3 + 1)
+            (c._1, c._2 + l, c._3 + v._2.rows)
           },
           combOp = (c1, c2) => {
             // c: (grad, loss, count)
             (c1._1 += c2._1, c1._2 + c2._2, c1._3 + c2._3)
         })
 
+      // sampleData.unpersist()
+
       if (miniBatchSize > 0) {
+        logInfo("At iteration " + i + " stochastic loss " + lossSum + " " + miniBatchSize + " " + lossSum / miniBatchSize
+          + " regVal " + regVal)
         /**
          * NOTE(Xinghao): lossSum is computed using the weights from the previous iteration
          * and regVal is the regularization value computed in the previous iteration as well.
@@ -208,8 +253,8 @@ object GradientDescent extends Logging {
       }
     }
 
-    logInfo("GradientDescent.runMiniBatchSGD finished. Last 10 stochastic losses %s".format(
-      stochasticLossHistory.takeRight(10).mkString(", ")))
+    logInfo("GradientDescent.runMiniBatchSGD finished. Last 20 stochastic losses %s".format(
+      stochasticLossHistory.takeRight(20).mkString(", ")))
     (weights, stochasticLossHistory.toArray)
   }
 }

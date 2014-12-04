@@ -36,6 +36,8 @@ class LeastSquaresGradientDescent(numIterations: Int, stepSize: Double,
       labels.zip(features)
     }
 
+    data.cache()
+
     // Train(RDD[LabeledPoint], numIterations, stepSize, miniBatchFraction)
     val sgd = new MultiClassLinearRegressionWithSGD()
     sgd.optimizer
@@ -44,6 +46,7 @@ class LeastSquaresGradientDescent(numIterations: Int, stepSize: Double,
        .setMiniBatchFraction(miniBatchFraction)
        .setRegParam(0.0)
     val model = sgd.run(data)
+    data.unpersist()
     model.weights
   }
 
@@ -54,12 +57,19 @@ class LeastSquaresGradientDescent(numIterations: Int, stepSize: Double,
 
     lambdas.map { lambda =>
       val data = A.rdd.zip(b.rdd).flatMap { x =>
-        val feature_rows = x._1.mat.data.grouped(x._1.mat.rows).toSeq.transpose
-        val features = feature_rows.map(x => new DenseVector[Double](x.toArray))
-        val label_rows = x._2.mat.data.grouped(x._2.mat.rows).toSeq.transpose
-        val labels = label_rows.map(row => row.toArray)
-        labels.zip(features)
+        val numRows = x._1.mat.rows
+        (0 until numRows).map { r =>
+          (x._2.mat(r, ::).inner.toArray, DenseVector(x._1.mat(r, ::).inner.toArray))
+        }
+        // val feature_rows = x._1.mat.data.grouped(x._1.mat.rows).toSeq.transpose
+        // val features = feature_rows.map(x => new DenseVector[Double](x.toArray))
+        // val label_rows = x._2.mat.data.grouped(x._2.mat.rows).toSeq.transpose
+        // val labels = label_rows.map(row => row.toArray)
+        // labels.zip(features)
       }
+
+      data.cache()
+      data.count
 
       val sgd = new MultiClassLinearRegressionWithSGD()
       sgd.optimizer
@@ -68,6 +78,7 @@ class LeastSquaresGradientDescent(numIterations: Int, stepSize: Double,
          .setMiniBatchFraction(miniBatchFraction)
          .setRegParam(lambda)
       val model = sgd.run(data)
+      data.unpersist()
       model.weights
     }
   }

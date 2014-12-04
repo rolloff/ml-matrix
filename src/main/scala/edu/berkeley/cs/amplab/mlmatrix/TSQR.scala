@@ -167,17 +167,27 @@ class TSQR extends RowPartitionedSolver with Logging with Serializable {
       b: RowPartitionedMatrix,
       lambdas: Array[Double]): Seq[DenseMatrix[Double]] = {
     val matrixParts = A.rdd.zip(b.rdd).map(x => (x._1.mat, x._2.mat))
+    val localQR = A.rdd.context.accumulator(0.0, "Time taken for Local QR Solve")
+
     val qrTree = matrixParts.map { part =>
       val (aPart, bPart) = part
       if (aPart.rows < aPart.cols) {
         (aPart, bPart)
       } else {
-        QRUtils.qrSolve(aPart, bPart)
+        val begin = System.nanoTime
+        val out = QRUtils.qrSolve(aPart, bPart)
+        localQR += ((System.nanoTime - begin) / 1000000)
+        out
       }
     }
 
     val depth = math.ceil(math.log(A.rdd.partitions.size)/math.log(2)).toInt
-    val qrResult = Utils.treeReduce(qrTree, reduceQRSolve, depth=depth)
+    val qrResult = Utils.treeReduce(qrTree, 
+      reduceQRSolve(
+        localQR, 
+        _: (DenseMatrix[Double], DenseMatrix[Double]),
+        _: (DenseMatrix[Double], DenseMatrix[Double])),
+      depth=depth)
 
     val results = lambdas.map { lambda =>
       // We only have one partition right now
@@ -187,7 +197,7 @@ class TSQR extends RowPartitionedSolver with Logging with Serializable {
       } else {
         val lambdaRB = (DenseMatrix.eye[Double](rFinal.cols) :* math.sqrt(lambda),
           new DenseMatrix[Double](rFinal.cols, bFinal.cols))
-        val reduced = reduceQRSolve((rFinal, bFinal), lambdaRB)
+        val reduced = reduceQRSolve(localQR, (rFinal, bFinal), lambdaRB)
         reduced._1 \ reduced._2
       }
       out
@@ -196,16 +206,22 @@ class TSQR extends RowPartitionedSolver with Logging with Serializable {
   }
 
   private def reduceQRSolve(
+      acc: Accumulator[Double],
       a: (DenseMatrix[Double], DenseMatrix[Double]),
       b: (DenseMatrix[Double], DenseMatrix[Double])): (DenseMatrix[Double], DenseMatrix[Double]) = {
-    QRUtils.qrSolve(DenseMatrix.vertcat(a._1, b._1),
+    val begin = System.nanoTime
+    val out = QRUtils.qrSolve(DenseMatrix.vertcat(a._1, b._1),
       DenseMatrix.vertcat(a._2, b._2))
+    acc += ((System.nanoTime - begin) / 1e6)
+    out
   }
 
   def solveManyLeastSquaresWithL2(
       A: RowPartitionedMatrix,
       b: RDD[Seq[DenseMatrix[Double]]],
       lambdas: Array[Double]): Seq[DenseMatrix[Double]] = {
+
+    val localQR = A.rdd.context.accumulator(0.0, "Time taken for Local QR Solves")
 
     val matrixParts = A.rdd.zip(b).map { x =>
       (x._1.mat, x._2)
@@ -232,7 +248,7 @@ class TSQR extends RowPartitionedSolver with Logging with Serializable {
       } else {
         val lambdaRB = (DenseMatrix.eye[Double](rFinal.cols) :* math.sqrt(lambda),
           new DenseMatrix[Double](rFinal.cols, bFinal.cols))
-        val reduced = reduceQRSolve((rFinal, bFinal), lambdaRB)
+        val reduced = reduceQRSolve(localQR, (rFinal, bFinal), lambdaRB)
         reduced._1 \ reduced._2
       }
       out

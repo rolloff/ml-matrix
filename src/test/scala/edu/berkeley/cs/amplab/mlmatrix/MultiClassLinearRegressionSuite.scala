@@ -29,7 +29,7 @@ class MultiClassLinearRegressionSuite extends FunSuite with LocalSparkContext {
     }
 
     val sgd = new MultiClassLinearRegressionWithSGD()
-    sgd.optimizer.setStepSize(1.0)
+    sgd.optimizer.setStepSize(0.1)
                  .setNumIterations(50)
                  .setMiniBatchFraction(1.0)
                  .setRegParam(0.0) 
@@ -38,7 +38,28 @@ class MultiClassLinearRegressionSuite extends FunSuite with LocalSparkContext {
 
     val localX = localA \ localB
 
-    println("X was " + x)
+    // println("X was " + x)
+    // println("localX was " + localX)
+
+    println("Abs max " + max(abs((x - localX).toDenseVector)))
+    println("2 norm diff / norm x = " + norm((x - localX).toDenseVector, 2.0) /
+      norm(localX.toDenseVector, 2.0))
+  }
+
+  test("Test Least squares SGD") {
+    sc = new SparkContext("local", "test")
+    val A = RowPartitionedMatrix.createRandom(sc, 128, 16, 4, cache=true)
+    val b =  A.mapPartitions(
+      part => DenseMatrix.rand(part.rows, 4)).cache()
+
+    val localA = A.collect()
+    val localB = b.collect()
+
+    val sgd = new LeastSquaresGradientDescent(50, stepSize=0.1, miniBatchFraction=1.0)
+    val x = sgd.solveLeastSquares(A, b)
+    val localX = localA \ localB
+
+    // println("X was " + x)
     // println("localX was " + localX)
 
     println("Abs max " + max(abs((x - localX).toDenseVector)))

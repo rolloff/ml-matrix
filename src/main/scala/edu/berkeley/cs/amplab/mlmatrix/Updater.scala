@@ -72,7 +72,7 @@ class SquaredL2Updater extends Updater {
     // the gradient of the regularizer (= regParam * weightsOld)
     // w' = w - thisIterStepSize * (gradient + regParam * w)
     // w' = (1 - thisIterStepSize * regParam) * w - thisIterStepSize * gradient
-    val thisIterStepSize = stepSize / math.sqrt(iter)
+    val thisIterStepSize = stepSize // / math.sqrt(iter)
 
     weightsOld :*= (1.0 - thisIterStepSize * regParam)
     weightsOld += gradient * (-thisIterStepSize)

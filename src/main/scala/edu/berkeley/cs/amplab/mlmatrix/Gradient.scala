@@ -34,7 +34,7 @@ abstract class Gradient extends Serializable {
    *
    * @return loss
    */
-  def compute(data: DenseVector[Double], label: Array[Double], weights: DenseMatrix[Double], cumGradient: DenseMatrix[Double]): Double
+  def compute(data: DenseMatrix[Double], label: DenseMatrix[Double], weights: DenseMatrix[Double], cumGradient: DenseMatrix[Double]): Double
 }
 
 
@@ -44,22 +44,35 @@ abstract class Gradient extends Serializable {
  *              L = 1/n ||A weights-y||^2
  * See also the documentation for the precise formulation.
  */
-class LeastSquaresGradient extends Gradient {
+class LeastSquaresBatchGradient extends Gradient {
 
   override def compute(
-      data: DenseVector[Double],
-      labels: Array[Double],
+      data: DenseMatrix[Double],
+      labels: DenseMatrix[Double],
       weights: DenseMatrix[Double],
       cumGradient: DenseMatrix[Double]): Double = {
 
-    val breezeLabels = new DenseVector[Double](labels)
-    val dataMat = new DenseMatrix[Double](1, data.length, data.toArray)
+    // val breezeLabels = new DenseVector[Double](labels)
 
-    val diff = weights.t * data - breezeLabels
+    // println("data dims " + data.rows + "x" + data.cols)
+    // println("weights dims " + weights.rows + "x" + weights.cols)
 
-    cumGradient :+=  (kron(dataMat.t, new DenseMatrix[Double](1, diff.length, diff.toArray)) * 2.0)
+    val diff = data * weights
+    diff -= labels 
 
-    math.pow(norm(diff, 2.0), 2)
+    // val diff = (data * weights - labels)
+
+    val dot = data.t * diff
+    dot :*= 2.0
+
+    cumGradient :+= dot
+
+    // val dataMat = new DenseMatrix[Double](1, data.length, data.toArray)
+    // cumGradient :+=  (kron(dataMat.t, new DenseMatrix[Double](1, diff.length, diff.toArray)) * 2.0)
+
+    // Compute the row norms, square them and sum them
+    sum(norm(diff(*, ::)) :^ 2.0)
+    // math.pow(norm(diff.toDenseVector, 2.0), 2)
   }
 }
 
