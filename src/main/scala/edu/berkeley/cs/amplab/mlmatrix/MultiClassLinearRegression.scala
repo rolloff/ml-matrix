@@ -34,7 +34,7 @@ class MultiClassLinearRegressionWithSGD (
     private var miniBatchFraction: Double,
     private var regParam: Double) extends Serializable with Logging {
 
-  private val gradient = new LeastSquaresGradient()
+  private val gradient = new LeastSquaresBatchGradient()
   private val updater = new SquaredL2Updater()
   val optimizer = new GradientDescent(gradient, updater)
     .setStepSize(stepSize)
@@ -57,7 +57,10 @@ class MultiClassLinearRegressionWithSGD (
     val first = input.first()
     val numFeatures: Int = first._2.size
     val numClasses: Int = first._1.length
+    val rnd = new scala.util.Random(123)
 
+    // val initWeights = (0 until numFeatures * numClasses).map { x => rnd.nextDouble * 2.0 - 1 }
+    // val initialWeights = new DenseMatrix(numFeatures, numClasses, initWeights.toArray)
     val initialWeights = DenseMatrix.zeros[Double](numFeatures, numClasses)
     // val data = input.map(labeledPoint => (labeledPoint.label, labeledPoint.features))
     val data = input

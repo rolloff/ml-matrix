@@ -6,8 +6,8 @@ import breeze.linalg._
 import breeze.numerics._
 
 import org.apache.hadoop.mapred.FileSplit
-import org.apache.hadoop.mapred.{FileInputFormat, InputFormat, JobConf, SequenceFileInputFormat, TextInputFormat}
-import org.apache.hadoop.io.{ArrayWritable, BooleanWritable, BytesWritable, DoubleWritable, FloatWritable, IntWritable, LongWritable, NullWritable, Text, Writable}
+import org.apache.hadoop.mapred.TextInputFormat
+import org.apache.hadoop.io.{LongWritable, Text, Writable}
 
 import edu.berkeley.cs.amplab.mlmatrix.util.QRUtils
 import edu.berkeley.cs.amplab.mlmatrix.util.Utils
@@ -20,7 +20,6 @@ import org.apache.spark.SparkContext._
 
 
 object Fusion extends Logging with Serializable {
-
 
   def solveForX(
       A: RowPartitionedMatrix,
@@ -68,7 +67,6 @@ object Fusion extends Logging with Serializable {
     scala.math.sqrt(unregularizedNorm*unregularizedNorm + lambda*normX*normX)
   }
 
-
   // def textFileWithName(sc: SparkContext, filename: String) = {
   //   sc.hadoopFile(filename, classOf[TextInputFormat], classOf[LongWritable],
   //       classOf[Text]).asInstanceOf[HadoopRDD[LongWritable, Text]].mapPartitionsWithInputSplit { case (split, lineIter) =>
@@ -109,7 +107,6 @@ object Fusion extends Logging with Serializable {
     // in.map { ary => argtopk(ary, k).toArray }
   }
 
-
   def calcFusedTestErr(daisyTest: RowPartitionedMatrix, lcsTest: RowPartitionedMatrix,
     daisyX: DenseMatrix[Double], lcsX: DenseMatrix[Double],
     actualLabels: RDD[Array[Int]],
@@ -137,36 +134,48 @@ object Fusion extends Logging with Serializable {
       fused.data.grouped(fused.rows).toSeq.transpose.map(x => x.toArray)
     }
 
-    val predictedLabels = topKClassifier(10, fusedPrediction)
+    val predictedLabels = topKClassifier(5, fusedPrediction)
     val errPercent = getErrPercent(predictedLabels, actualLabels, numTestImages)
     errPercent
   }
 
   def main(args: Array[String]) {
     if (args.length < 5) {
-      println("Got args " + args.mkString(" "))
       println("Usage: Fusion <master> <data_dir> <parts> <solver: tsqr|normal|sgd|local> <lambda> [<stepsize> <numIters> <miniBatchFraction>]")
       System.exit(0)
     }
+
     val sparkMaster = args(0)
-    //Directory that holds the data
+    // Directory that holds the data
     val directory = args(1)
     val parts = args(2).toInt
     val solver = args(3)
     // Lambda for regularization
     val lambda = args(4).toDouble
 
+    println("Running Fusion with ")
+    println("master: " + sparkMaster)
+    println("directory: " + directory)
+    println("parts: " + parts)
+    println("solver: " + solver)
+    println("lambda: " + lambda)
+
     var stepSize = 0.1
     var numIterations = 10
     var miniBatchFraction = 1.0
     if (solver == "sgd") {
       if (args.length < 8) {
+        println(args.mkString(","))
         println("Usage: Fusion <master> <data_dir> <parts> <solver: tsqr|normal|sgd|local> <lambda> [<stepsize> <numIters> <miniBatchFraction>]")
         System.exit(0)
       } else {
         stepSize = args(5).toDouble
         numIterations = args(6).toInt
         miniBatchFraction = args(7).toDouble
+
+        println("stepSize: " + stepSize)
+        println("numIterations: " + numIterations)
+        println("miniBatchFraction: " + miniBatchFraction)
       }
     }
 
@@ -175,6 +184,7 @@ object Fusion extends Logging with Serializable {
       .setAppName("Fusion")
       .setJars(SparkContext.jarOfClass(this.getClass).toSeq)
     val sc = new SparkContext(conf)
+    sc.addSparkListener(new org.apache.spark.scheduler.JobLogger())
 
     // Daisy filenames
     val daisyTrainFilename = directory + "daisy-aPart1-1/"
@@ -245,6 +255,27 @@ object Fusion extends Logging with Serializable {
 
     testZipped.unpersist()
 
+
+    // Compute daisy and LCS row norms
+    val daisyRowNorms = daisyTrain.rdd.flatMap { part =>
+      val nRows = part.mat.rows
+      (0 until nRows).map { row =>
+        norm(part.mat(row, ::).inner, 2)
+      }
+    }.collect().sorted
+
+    println("DAISY Row norms highest " + daisyRowNorms.takeRight(10).mkString(","))
+
+    val lcsRowNorms = lcsTrain.rdd.flatMap { part =>
+      val nRows = part.mat.rows
+      (0 until nRows).map { row =>
+        norm(part.mat(row, ::).inner, 2)
+      }
+    }.collect().sorted
+
+    println("LCS Row norms highest " + lcsRowNorms.takeRight(10).mkString(","))
+
+
     // Solve for daisy x
     var begin = System.nanoTime()
     val daisyX = solveForX(daisyTrain, daisyB, solver, lambda, numIterations, stepSize, miniBatchFraction)
@@ -273,14 +304,14 @@ object Fusion extends Logging with Serializable {
     val lcsResidual = computeResidualNormWithL2(lcsTrain, lcsB, lcsX, lambda)
     println("Finished computing the residuals " + daisyResidual + " " + lcsResidual)
 
-    println("Condition number, residual norm, time")
-    val daisyR = daisyTrain.qrR()
-    println("Daisy: " + daisyTrain.condEst(Some(daisyR)) + " " + daisyResidual + " " + daisyTime)
-    //println("SVDs of daisyTrain " + daisyTrain.svds(Some(daisyR)).toArray.mkString(" "))
+    // println("Condition number, residual norm, time")
+    // val daisyR = daisyTrain.qrR()
+    // println("Daisy: " + daisyTrain.condEst(Some(daisyR)) + " " + daisyResidual + " " + daisyTime)
+    // //println("SVDs of daisyTrain " + daisyTrain.svds(Some(daisyR)).toArray.mkString(" "))
 
-    val lcsR = lcsTrain.qrR()
-    println("LCS: " + lcsTrain.condEst(Some(lcsR)) + " " + lcsResidual + " " + lcsTime)
-    //println("SVDs of lcsTrain " + lcsTrain.svds(Some(lcsR)).toArray.mkString(" "))
+    // val lcsR = lcsTrain.qrR()
+    // println("LCS: " + lcsTrain.condEst(Some(lcsR)) + " " + lcsResidual + " " + lcsTime)
+    // //println("SVDs of lcsTrain " + lcsTrain.svds(Some(lcsR)).toArray.mkString(" "))
 
     val testError = calcFusedTestErr(daisyTest, lcsTest, daisyX, lcsX, imagenetTestLabels, 0.5, 0.5)
     println(testError)
