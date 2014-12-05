@@ -76,6 +76,7 @@ object FusionBCD extends Logging with Serializable {
     var runningSum : Option[RowPartitionedMatrix] = None
     while (i < l) {
       val A = aTrains(i)
+      val xBroadcast = A.rdd.context.broadcast(xComputeds(i))
       val Ax = A.mapPartitions { part =>
         part*xBroadcast.value
       }
@@ -83,20 +84,20 @@ object FusionBCD extends Logging with Serializable {
       if (runningSum.isEmpty) {
         runningSum = Some(Ax)
       } else {
-        runningSum = Some(runningSum.get + Ax)
+        runningSum = Some((runningSum.get + Ax).asInstanceOf[RowPartitionedMatrix])
       }
 
       val residualNorm = (b - runningSum.get).normFrobenius()
       residualNorms(i) = residualNorm
       i = i + 1
     }
-    residualNorm
+    residualNorms
   }
 
   def computeResidualNormWithL2(aTrains: Seq[RowPartitionedMatrix],
       b: RowPartitionedMatrix,
       xComputeds: Seq[DenseMatrix[Double]], lambda: Double) = {
-    val unregularizedNorms = computeResidualNorms(A,b,xComputed)
+    val unregularizedNorms = computeResidualNorms(aTrains ,b,xComputeds)
     val normXs = xComputeds.map(xComputed => norm(xComputed.toDenseVector))
 
     unregularizedNorms.zip(normXs).map { li =>
