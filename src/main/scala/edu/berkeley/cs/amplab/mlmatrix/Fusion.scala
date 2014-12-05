@@ -64,7 +64,7 @@ object Fusion extends Logging with Serializable {
     val unregularizedNorm = computeResidualNorm(A,b,xComputed)
     val normX = norm(xComputed.toDenseVector)
 
-    scala.math.sqrt(unregularizedNorm*unregularizedNorm + lambda*normX*normX)
+    (scala.math.sqrt(unregularizedNorm*unregularizedNorm + lambda*normX*normX), unregularizedNorm*unregularizedNorm, lambda*normX*normX)
   }
 
   // def textFileWithName(sc: SparkContext, filename: String) = {
@@ -299,6 +299,9 @@ object Fusion extends Logging with Serializable {
     // println("Condition number of daisyTest " + daisyTest.condEst())
     // println("Condition number of lcsTrain " + lcsTrain.condEst())
     // println("Condition number of lcsTest " + lcsTest.condEst())
+
+    println("Norm of daisyB is " + daisyB.normFrobenius())
+    println("Norm of lcsB is " + lcsB.normFrobenius())
 
     val daisyResidual = computeResidualNormWithL2(daisyTrain, daisyB, daisyX, lambda)
     val lcsResidual = computeResidualNormWithL2(lcsTrain, lcsB, lcsX, lambda)

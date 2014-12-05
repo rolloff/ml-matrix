@@ -217,10 +217,7 @@ object TIMIT extends Logging with Serializable {
 
     println("Finished solving for timit X ")
 
-
-    // Information about the spectrum of the matrices
-    // println("Condition number of timitTrain " + timitTrain.condEst())
-    // println("Condition number of timitTest " + timitTest.condEst())
+    println("Norm of timt B "+ timitB.normFrobenius())
 
     val timitResidual = computeResidualNormWithL2(timitTrain, timitB, timitX, lambda)
     println("Finished computing the residuals " + timitResidual)

@@ -202,7 +202,7 @@ class TSQR extends RowPartitionedSolver with Logging with Serializable {
         // reduced._1 is stacked R and sqrt(lambda)*I
         // look up breeze method to save out to csv
 
-        csvwrite(new File("~/RMatrix-"+ scala.util.Random.nextInt),  reduced._1)
+        csvwrite(new File("RMatrix-"+ scala.util.Random.nextInt),  reduced._1)
         //println("Diagonal elements of stacked R: " + diag(reduced._1).toArray.mkString(" "))
         reduced._1 \ reduced._2
       }
