@@ -192,7 +192,7 @@ object FusionBCD extends Logging with Serializable {
     val daisyBFilename = directory + "daisy-null-labels/"
 
     // LCS filenames
-    val lcsTrainFilenames = (1 to 5).map(i => directory + "lcs-aPart" + i.toString + "-" + i.toString + "/")
+    val lcsTrainFilenames = (1 to 5).map(i => directory + "lcs-aPart1" + "-" + i.toString + "/")
     val lcsTestFilenames = (1 to 5).map(i => directory + "lcs-testFeatures-test-" + i.toString + "/")
     val lcsBFilename = directory + "lcs-null-labels/"
 
@@ -222,23 +222,31 @@ object FusionBCD extends Logging with Serializable {
       Utils.repartitionAndSortWithinPartitions(daisyTrainRDD.zipWithUniqueId.map(x => x.swap), hp).cache()
     }
     daisyTrainRDDsPartitioned.foreach(rdd => rdd.count)
+    val daisyTrains = daisyTrainRDDsPartitioned.map(p => RowPartitionedMatrix.fromArray(p.map(_._2)).cache())
+    daisyTrains.map(train => train.rdd.count)
+    daisyTrainRDDsPartitioned.map(rdd => rdd.unpersist())
 
     val daisyBRDDPartitioned = Utils.repartitionAndSortWithinPartitions(daisyBRDD.zipWithUniqueId.map(x => x.swap), hp).cache()
     daisyBRDDPartitioned.count()
+    val daisyB = RowPartitionedMatrix.fromArray(daisyBRDDPartitioned.map(_._2)).cache()
+    daisyB.rdd.count
+    daisyBRDDPartitioned.unpersist()
 
     val lcsTrainRDDsPartitioned = lcsTrainRDDs.map { lcsTrainRDD =>
       Utils.repartitionAndSortWithinPartitions(lcsTrainRDD.zipWithUniqueId.map(x => x.swap), hp).cache()
     }
     lcsTrainRDDsPartitioned.foreach(rdd => rdd.count)
+    val lcsTrains = lcsTrainRDDsPartitioned.map(p => RowPartitionedMatrix.fromArray(p.map(_._2)).cache())
+    lcsTrains.map(train => train.rdd.count)
+    lcsTrainRDDsPartitioned.map(rdd => rdd.unpersist())
 
     val lcsBRDDPartitioned = Utils.repartitionAndSortWithinPartitions(lcsBRDD.zipWithUniqueId.map(x => x.swap), hp).cache()
     lcsBRDDPartitioned.count()
+    val lcsB = RowPartitionedMatrix.fromArray(lcsBRDDPartitioned.map(_._2)).cache()
+    lcsB.rdd.count
+    lcsBRDDPartitioned.unpersist()
 
     // daisyTrains should be a Seq[RowPartitionedMatrix]
-    val daisyTrains = daisyTrainRDDsPartitioned.map(p => RowPartitionedMatrix.fromArray(p.map(_._2)).cache())
-    val daisyB = RowPartitionedMatrix.fromArray(daisyBRDDPartitioned.map(_._2)).cache()
-    val lcsTrains = lcsTrainRDDsPartitioned.map(p => RowPartitionedMatrix.fromArray(p.map(_._2)).cache())
-    val lcsB = RowPartitionedMatrix.fromArray(lcsBRDDPartitioned.map(_._2)).cache()
 
     // Load text file as array of ints
     val imagenetTestLabelsRDD = sc.textFile(imagenetTestLabelsFilename).map { line =>
@@ -264,19 +272,11 @@ object FusionBCD extends Logging with Serializable {
     val imagenetTestLabels = imagenetTestLabelsRDDPartitioned.map(_._2).cache()
 
     // Count the RDDs inside RowPartitionedMatrix
-    daisyTrains.map(train => train.rdd.count)
     daisyTests.map(test => test.rdd.count)
-    daisyB.rdd.count
-    lcsTrains.map(train => train.rdd.count)
     lcsTests.map(test => test.rdd.count)
-    lcsB.rdd.count
     imagenetTestLabels.count
 
     // Unpersist the old RDDs
-    daisyTrainRDDsPartitioned.map(rdd => rdd.unpersist())
-    daisyBRDDPartitioned.unpersist()
-    lcsTrainRDDsPartitioned.map(rdd => rdd.unpersist())
-    lcsBRDDPartitioned.unpersist()
     daisyTestRDDsPartitioned.map(rdd => rdd.unpersist())
     lcsTestRDDsPartitioned.map(rdd => rdd.unpersist())
 

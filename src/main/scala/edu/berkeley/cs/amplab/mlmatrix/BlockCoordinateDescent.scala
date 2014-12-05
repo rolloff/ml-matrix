@@ -101,7 +101,8 @@ class BlockCoordinateDescent extends Logging with Serializable {
 
     (0 until numIters).foreach { iter =>
       // Step 2: Pick a random permutation
-      val permutation = scala.util.Random.shuffle((0 until numColBlocks).toList)
+      // val permutation = scala.util.Random.shuffle((0 until numColBlocks).toList)
+      val permutation = (0 until numColBlocks).toList 
       permutation.foreach { p =>
         val aPart = aParts(p)
 
