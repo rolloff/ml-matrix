@@ -185,13 +185,13 @@ object FusionBCD extends Logging with Serializable {
     val sc = new SparkContext(conf)
 
     // Daisy filenames
-    val daisyTrainFilenames = (1 to 2).map( i => directory + "daisy-aPart" + i.toString + "-" + i.toString + "/")
-    val daisyTestFilenames = (1 to 2).map( i => directory + "daisy-testFeatures-test-" + i.toString + "/")
+    val daisyTrainFilenames = (1 to 1).map( i => directory + "daisy-aPart" + i.toString + "-" + i.toString + "/")
+    val daisyTestFilenames = (1 to 1).map( i => directory + "daisy-testFeatures-test-" + i.toString + "/")
     val daisyBFilename = directory + "daisy-null-labels/"
 
     // LCS filenames
-    val lcsTrainFilenames = (1 to 2).map(i => directory + "lcs-aPart" + i.toString + "-" + i.toString + "/")
-    val lcsTestFilenames = (1 to 2).map(i => directory + "lcs-testFeatures-test-" + i.toString + "/")
+    val lcsTrainFilenames = (1 to 1).map(i => directory + "lcs-aPart" + i.toString + "-" + i.toString + "/")
+    val lcsTestFilenames = (1 to 1).map(i => directory + "lcs-testFeatures-test-" + i.toString + "/")
     val lcsBFilename = directory + "lcs-null-labels/"
 
     // Actual labels from imagenet
