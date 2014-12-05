@@ -168,7 +168,15 @@ object TIMIT extends Logging with Serializable {
     val timitTrainRDD = loadMatrixFromFile(sc, timitTrainFilename, parts)
     val timitTestRDD = loadMatrixFromFile(sc, timitTestFilename, parts)
     val timitBRDD = loadMatrixFromFile(sc, timitBFilename, parts)
+    println("TIMIT train partitions size: " + timitTrainRDD.partitions.size)
+    println("TIMIT b partitions size: " + timitBRDD.partitions.size)
+    // Rows per partition
+    println("Rows per Timit train partition " + timitTrainRDD.mapPartitions(iter => Iterator.single(iter.length)).collect().mkString(" "))
+    println("Rows per Timit b partition " + timitBRDD.mapPartitions(iter => Iterator.single(iter.length)).collect().mkString(" "))
+
     var timitZipped = timitTrainRDD.zip(timitBRDD).repartition(parts).cache()
+
+
 
     // Lets cache and assert a few things
     timitZipped.count
