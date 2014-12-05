@@ -142,6 +142,7 @@ object TimitBCD extends Logging with Serializable {
       val predictedLabels = topKClassifier(1, runningSum.get)
       val errPercent = getErrPercent(predictedLabels, actualLabels, numTestImages)
       testErrors(i) = errPercent
+      i = i + 1
     }
     testErrors
   }
