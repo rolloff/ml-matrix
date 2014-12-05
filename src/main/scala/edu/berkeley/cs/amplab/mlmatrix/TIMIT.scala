@@ -69,7 +69,7 @@ object TIMIT extends Logging with Serializable {
   }
 
 
-  def loadMatrixFromFile(sc: SparkContext, filename: String): RDD[Array[Double]] = {
+  def loadMatrixFromFile(sc: SparkContext, filename: String, parts: Int): RDD[Array[Double]] = {
     sc.textFile(filename).map { line =>
       line.split(",").map(y => y.toDouble)
     }
@@ -117,11 +117,11 @@ object TIMIT extends Logging with Serializable {
       p.data.grouped(p.rows).toSeq.transpose.map(y => y.toArray)
     }
 
-    val predictedLabels = topKClassifier(10, predictionArray)
+    val predictedLabels = topKClassifier(5, predictionArray)
     val errPercent = getErrPercent(predictedLabels, actualLabels, numTestImages)
     errPercent
   }
-  
+
   def main(args: Array[String]) {
     if (args.length < 5) {
       println("Got args " + args.mkString(" "))
@@ -165,9 +165,9 @@ object TIMIT extends Logging with Serializable {
     val timitActualFilename = directory + "timit-actual/"
 
     // load matrix RDDs
-    val timitTrainRDD = loadMatrixFromFile(sc, timitTrainFilename)
-    val timitTestRDD = loadMatrixFromFile(sc, timitTestFilename)
-    val timitBRDD = loadMatrixFromFile(sc, timitBFilename)
+    val timitTrainRDD = loadMatrixFromFile(sc, timitTrainFilename, parts)
+    val timitTestRDD = loadMatrixFromFile(sc, timitTestFilename, parts)
+    val timitBRDD = loadMatrixFromFile(sc, timitBFilename, parts)
     var timitZipped = timitTrainRDD.zip(timitBRDD).repartition(parts).cache()
 
     // Lets cache and assert a few things
