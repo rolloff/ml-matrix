@@ -251,13 +251,31 @@ object FusionBCD extends Logging with Serializable {
     val lcsTests = lcsTestRDDsPartitioned.map(p => RowPartitionedMatrix.fromArray(p.map(_._2)).cache())
     val imagenetTestLabels = imagenetTestLabelsRDDPartitioned.map(_._2).cache()
 
-    // Unpersist the RDDs
-    daisyTrains.map(daisyTrain => daisyTrain.rdd.unpersist())
-    daisyB.rdd.unpersist()
-    lcsTrains.map(lcsTrain => lcsTrain.rdd.unpersist())
-    lcsB.rdd.unpersist()
-    daisyTests.map(daisyTest => daisyTest.rdd.unpersist())
-    lcsTests.map(lcsTest => lcsTest.rdd.unpersist())
+    // Count the RDDs inside RowPartitionedMatrix
+    daisyTrains.map(train => train.rdd.count)
+    daisyTests.map(test => test.rdd.count)
+    daisyB.rdd.count
+    lcsTrains.map(train => train.rdd.count)
+    lcsTests.map(test => test.rdd.count)
+    lcsB.rdd.count
+
+
+
+    // Unpersist the old RDDs
+    daisyTrainRDDsPartitioned.map(rdd => rdd.unpersist())
+    daisyBRDDPartitioned.unpersist()
+    lcsTrainRDDsPartitioned.map(rdd => rdd.unpersist())
+    lcsBRDDPartitioned.unpersist()
+    daisyTestRDDsPartitioned.map(rdd => rdd.unpersist())
+    lcsTestRDDsPartitioned.map(rdd => rdd.unpersist())
+
+    daisyTrainRDDs.map(rdd => rdd.unpersist())
+    daisyBRDD.unpersist()
+    lcsTrainRDDs.map(rdd => rdd.unpersist())
+    lcsBRDD.unpersist()
+    daisyTestRDDs.map(rdd => rdd.unpersist())
+    lcsTestRDDs.map(rdd => rdd.unpersist())
+
 
 
 
