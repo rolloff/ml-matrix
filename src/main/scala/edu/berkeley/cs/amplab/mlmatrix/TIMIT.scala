@@ -70,7 +70,7 @@ object TIMIT extends Logging with Serializable {
 
 
   def loadMatrixFromFile(sc: SparkContext, filename: String, parts: Int): RDD[Array[Double]] = {
-    sc.textFile(filename).map { line =>
+    sc.textFile(filename, parts).map { line =>
       line.split(",").map(y => y.toDouble)
     }
   }

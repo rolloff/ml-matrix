@@ -1,5 +1,6 @@
 package edu.berkeley.cs.amplab.mlmatrix
 
+import java.io.File
 import java.util.concurrent.ThreadLocalRandom
 import scala.collection.mutable.ArrayBuffer
 
@@ -199,7 +200,10 @@ class TSQR extends RowPartitionedSolver with Logging with Serializable {
           new DenseMatrix[Double](rFinal.cols, bFinal.cols))
         val reduced = reduceQRSolve(localQR, (rFinal, bFinal), lambdaRB)
         // reduced._1 is stacked R and sqrt(lambda)*I
-        println("Diagonal elements of stacked R: " + diag(reduced._1).toArray.mkString(" "))
+        // look up breeze method to save out to csv
+
+        csvwrite(new File("~/RMatrix-"+ scala.util.Random.nextInt),  reduced._1)
+        //println("Diagonal elements of stacked R: " + diag(reduced._1).toArray.mkString(" "))
         reduced._1 \ reduced._2
       }
       out
