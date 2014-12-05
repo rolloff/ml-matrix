@@ -1,6 +1,7 @@
 package edu.berkeley.cs.amplab.mlmatrix
 
 import scala.io.Source._
+import scala.util.Random
 
 import breeze.linalg._
 import breeze.numerics._
@@ -215,7 +216,34 @@ object FusionBCD extends Logging with Serializable {
     }
     val lcsBRDD = loadMatrixFromFile(sc, lcsBFilename)
 
+    // Train partitioning
+    val hp = new HashPartitioner(parts)
+    // Use daisyBRDD 
+    val randomIndices = daisyBRDD.mapPartitionsWithIndex { case (index, items) => 
+      var position = (new Random(index)).nextInt(parts)
+      items.map { t =>
+        // Note that the hash code of the key will just be the key itself. The HashPartitioner
+        // will mod it with the number of total partitions.
+        position = position + 1
+        position
+      }
+    }.cache()
 
+    val daisyBRDDPartitioned = randomIndices.zip(daisyBRDD).partitionBy(hp).cache()
+    daisyBRDDPartitioned.count
+
+    val daisyTrainRDDsPartitioned = daisyTrainRDDs.map(daisyTrainRDD =>
+      randomIndices.zip(daisyTrainRDD).partitionBy(hp).cache())
+    daisyTrainRDDsPartitioned.foreach(rdd => rdd.count)
+
+    val lcsTrainRDDsPartitioned = lcsTrainRDDs.map(lcsTrainRDD => 
+      randomIndices.zip(lcsTrainRDD).partitionBy(hp).cache())
+    lcsTrainRDDsPartitioned.foreach(rdd => rdd.count)
+
+    val lcsBRDDPartitioned = randomIndices.zip(lcsBRDD).partitionBy(hp).cache()
+    lcsBRDDPartitioned.count()
+
+    /*
     val hp = new HashPartitioner(parts)
     val daisyTrainRDDsPartitioned = daisyTrainRDDs.map( daisyTrainRDD => daisyTrainRDD.zipWithUniqueId.map(x => x.swap).partitionBy(hp).cache())
     daisyTrainRDDsPartitioned.foreach(rdd => rdd.count)
@@ -225,6 +253,7 @@ object FusionBCD extends Logging with Serializable {
     lcsTrainRDDsPartitioned.foreach(rdd => rdd.count)
     val lcsBRDDPartitioned = lcsBRDD.zipWithUniqueId.map(x => x.swap).partitionBy(hp).cache()
     lcsBRDDPartitioned.count()
+    */
 
     // daisyTrains should be a Seq[RowPartitionedMatrix]
     val daisyTrains = daisyTrainRDDsPartitioned.map(p => RowPartitionedMatrix.fromArray(p.map(_._2)).cache())
@@ -238,6 +267,29 @@ object FusionBCD extends Logging with Serializable {
     }
 
     val hpTest = new HashPartitioner(16)
+    val randomIndicesTest = imagenetTestLabelsRDD.mapPartitionsWithIndex { case (index, items) =>
+      var position = (new Random(index)).nextInt(parts)
+      items.map { t =>
+        // Note that the hash code of the key will just be the key itself. The HashPartitioner
+        // will mod it with the number of total partitions.
+        position = position + 1
+        position
+      }
+    }.cache()
+
+    val imagenetTestLabelsRDDPartitioned = randomIndicesTest.zip(imagenetTestLabelsRDD).partitionBy(hpTest).cache()
+    imagenetTestLabelsRDDPartitioned.count
+
+    val daisyTestRDDsPartitioned = daisyTestRDDs.map(daisyTestRDD =>
+      randomIndicesTest.zip(daisyTestRDD).partitionBy(hpTest).cache())
+    daisyTestRDDsPartitioned.foreach(rdd => rdd.count)
+
+    val lcsTestRDDsPartitioned = lcsTestRDDs.map(lcsTestRDD =>
+      randomIndicesTest.zip(lcsTestRDD).partitionBy(hpTest).cache())
+    lcsTestRDDsPartitioned.foreach(rdd => rdd.count)
+
+    /*
+    val hpTest = new HashPartitioner(16)
 
     // NOTE: We need to do this as test data has different number of entries per partition
     val daisyTestRDDsPartitioned = daisyTestRDDs.map(daisyTestRDD => daisyTestRDD.zipWithUniqueId.map(x => x.swap).partitionBy(hpTest).cache())
@@ -246,6 +298,7 @@ object FusionBCD extends Logging with Serializable {
     lcsTestRDDsPartitioned.foreach(rdd => rdd.count)
     val imagenetTestLabelsRDDPartitioned = imagenetTestLabelsRDD.zipWithUniqueId.map(x => x.swap).partitionBy(hpTest).cache()
     imagenetTestLabelsRDDPartitioned.count
+    */
 
     val daisyTests = daisyTestRDDsPartitioned.map(p => RowPartitionedMatrix.fromArray(p.map(_._2)).cache())
     val lcsTests = lcsTestRDDsPartitioned.map(p => RowPartitionedMatrix.fromArray(p.map(_._2)).cache())
@@ -259,8 +312,6 @@ object FusionBCD extends Logging with Serializable {
     lcsTests.map(test => test.rdd.count)
     lcsB.rdd.count
 
-
-
     // Unpersist the old RDDs
     daisyTrainRDDsPartitioned.map(rdd => rdd.unpersist())
     daisyBRDDPartitioned.unpersist()
@@ -269,15 +320,13 @@ object FusionBCD extends Logging with Serializable {
     daisyTestRDDsPartitioned.map(rdd => rdd.unpersist())
     lcsTestRDDsPartitioned.map(rdd => rdd.unpersist())
 
-    daisyTrainRDDs.map(rdd => rdd.unpersist())
-    daisyBRDD.unpersist()
-    lcsTrainRDDs.map(rdd => rdd.unpersist())
-    lcsBRDD.unpersist()
-    daisyTestRDDs.map(rdd => rdd.unpersist())
-    lcsTestRDDs.map(rdd => rdd.unpersist())
-
-
-
+    // TODO: We never cached these ?
+    // daisyTrainRDDs.map(rdd => rdd.unpersist())
+    // daisyBRDD.unpersist()
+    // lcsTrainRDDs.map(rdd => rdd.unpersist())
+    // lcsBRDD.unpersist()
+    // daisyTestRDDs.map(rdd => rdd.unpersist())
+    // lcsTestRDDs.map(rdd => rdd.unpersist())
 
     val rowPartitionedSolver = getSolver(solver, numIterationsSGD, stepSize, miniBatchFraction)
 
