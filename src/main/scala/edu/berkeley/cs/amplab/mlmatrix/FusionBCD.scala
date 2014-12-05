@@ -145,7 +145,7 @@ object FusionBCD extends Logging with Serializable {
       val predictedLabels = topKClassifier(5, runningSum.get)
       val errPercent = getErrPercent(predictedLabels, actualLabels, numTestImages)
       testErrors(i) = errPercent
-      i = i + 1 
+      i = i + 1
     }
     testErrors
   }
@@ -275,7 +275,7 @@ object FusionBCD extends Logging with Serializable {
 
     // Solve for lcs x
     var begin2 = System.nanoTime()
-    val lcsXs = new BlockCoordinateDescent().solveLeastSquaresWithL2(daisyTrains, daisyB, Array(lambda), numIterationsBCD, rowPartitionedSolver).map(p => p(0))
+    val lcsXs = new BlockCoordinateDescent().solveLeastSquaresWithL2(lcsTrains, lcsB, Array(lambda), numIterationsBCD, rowPartitionedSolver).map(p => p(0))
     var end2 = System.nanoTime()
     val lcsTime = (end2 -begin2) /1e6
 
