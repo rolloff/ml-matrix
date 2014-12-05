@@ -64,24 +64,44 @@ object FusionBCD extends Logging with Serializable {
         new TSQR()
     }
   }
-  def computeResidualNorm(A: RowPartitionedMatrix,
+  def computeResidualNorms(aTrains: Seq[RowPartitionedMatrix],
       b: RowPartitionedMatrix,
-      xComputed: DenseMatrix[Double]) = {
-    val xBroadcast = A.rdd.context.broadcast(xComputed)
-    val axComputed = A.mapPartitions { part =>
-      part*xBroadcast.value
+      xComputeds: Seq[DenseMatrix[Double]]) = {
+
+    val l = aTrains.length
+    var i = 0
+
+    val residualNorms = new Array[Double](l)
+
+    var runningSum : Option[RowPartitionedMatrix] = None
+    while (i < l) {
+      val A = aTrains(i)
+      val Ax = A.mapPartitions { part =>
+        part*xBroadcast.value
+      }
+
+      if (runningSum.isEmpty) {
+        runningSum = Some(Ax)
+      } else {
+        runningSum = Some(runningSum.get + Ax)
+      }
+
+      val residualNorm = (b - runningSum.get).normFrobenius()
+      residualNorms(i) = residualNorm
+      i = i + 1
     }
-    val residualNorm = (b - axComputed).normFrobenius()
     residualNorm
   }
 
-  def computeResidualNormWithL2(A: RowPartitionedMatrix,
+  def computeResidualNormWithL2(aTrains: Seq[RowPartitionedMatrix],
       b: RowPartitionedMatrix,
-      xComputed: DenseMatrix[Double], lambda: Double) = {
-    val unregularizedNorm = computeResidualNorm(A,b,xComputed)
-    val normX = norm(xComputed.toDenseVector)
+      xComputeds: Seq[DenseMatrix[Double]], lambda: Double) = {
+    val unregularizedNorms = computeResidualNorms(A,b,xComputed)
+    val normXs = xComputeds.map(xComputed => norm(xComputed.toDenseVector))
 
-    scala.math.sqrt(unregularizedNorm*unregularizedNorm + lambda*normX*normX)
+    unregularizedNorms.zip(normXs).map { li =>
+      scala.math.sqrt(li._1*li._1 + lambda*li._2*li._2)
+    }
   }
 
   def loadMatrixFromFile(sc: SparkContext, filename: String): RDD[Array[Double]] = {
@@ -218,7 +238,7 @@ object FusionBCD extends Logging with Serializable {
 
 
     val hp = new HashPartitioner(parts)
-    val daisyTrainRDDsPartitioned = daisyTrainRDDs.map { daisyTrainRDD => 
+    val daisyTrainRDDsPartitioned = daisyTrainRDDs.map { daisyTrainRDD =>
       Utils.repartitionAndSortWithinPartitions(daisyTrainRDD.zipWithUniqueId.map(x => x.swap), hp).cache()
     }
     daisyTrainRDDsPartitioned.foreach(rdd => rdd.count)
@@ -256,7 +276,7 @@ object FusionBCD extends Logging with Serializable {
     val hpTest = new HashPartitioner(16)
 
     // NOTE: We need to do this as test data has different number of entries per partition
-    val daisyTestRDDsPartitioned = daisyTestRDDs.map { daisyTestRDD => 
+    val daisyTestRDDsPartitioned = daisyTestRDDs.map { daisyTestRDD =>
       Utils.repartitionAndSortWithinPartitions(daisyTestRDD.zipWithUniqueId.map(x => x.swap), hpTest).cache()
     }
     daisyTestRDDsPartitioned.foreach(rdd => rdd.count)
@@ -308,12 +328,9 @@ object FusionBCD extends Logging with Serializable {
 
     println("Finished solving for lcsXs")
 
-    val daisyResiduals = daisyTrains.zip(daisyXs).map { case (daisyTrain, daisyX) =>
-      computeResidualNormWithL2(daisyTrain, daisyB, daisyX, lambda)
-    }
-    val lcsResiduals = lcsTrains.zip(lcsXs).map { case (lcsTrain, lcsX) =>
-      computeResidualNormWithL2(lcsTrain, lcsB, lcsX, lambda)
-    }
+    val daisyResiduals = computeResidualNormWithL2(daisyTrains, daisyB, daisyXs, lambda)
+    val lcsResiduals = computeResidualNormWithL2(lcsTrains, lcsB, lcsXs, lambda)
+
     println("Daisy Residuals " + daisyResiduals.mkString(" "))
     println("LCS Residuals " + lcsResiduals.mkString(" "))
 
