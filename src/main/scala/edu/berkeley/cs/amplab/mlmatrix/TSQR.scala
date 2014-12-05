@@ -182,9 +182,9 @@ class TSQR extends RowPartitionedSolver with Logging with Serializable {
     }
 
     val depth = math.ceil(math.log(A.rdd.partitions.size)/math.log(2)).toInt
-    val qrResult = Utils.treeReduce(qrTree, 
+    val qrResult = Utils.treeReduce(qrTree,
       reduceQRSolve(
-        localQR, 
+        localQR,
         _: (DenseMatrix[Double], DenseMatrix[Double]),
         _: (DenseMatrix[Double], DenseMatrix[Double])),
       depth=depth)
@@ -198,6 +198,8 @@ class TSQR extends RowPartitionedSolver with Logging with Serializable {
         val lambdaRB = (DenseMatrix.eye[Double](rFinal.cols) :* math.sqrt(lambda),
           new DenseMatrix[Double](rFinal.cols, bFinal.cols))
         val reduced = reduceQRSolve(localQR, (rFinal, bFinal), lambdaRB)
+        // reduced._1 is stacked R and sqrt(lambda)*I
+        println("Diagonal elements of stacked R: " + diag(reduced._1).toArray.mkString(" "))
         reduced._1 \ reduced._2
       }
       out
