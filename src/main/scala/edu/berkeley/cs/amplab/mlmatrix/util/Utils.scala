@@ -7,6 +7,7 @@ import org.apache.spark.SparkContext._
 import org.apache.spark.HashPartitioner
 import org.apache.spark.Partitioner
 import org.apache.spark.rdd.RDD
+import org.apache.spark.rdd.ShuffledRDD
 
 import breeze.linalg._
 
@@ -135,6 +136,11 @@ object Utils {
     def apply[T: ClassTag](rdd: RDD[T]) = {
       randomIndices.zip(rdd).partitionBy(partitioner).values
     }
+  }
+
+  def repartitionAndSortWithinPartitions[K : Ordering : ClassTag, V: ClassTag](rdd: RDD[(K, V)], partitioner: Partitioner): RDD[(K, V)] = {
+    val ordering = implicitly[Ordering[K]]
+    new ShuffledRDD[K, V, V](rdd, partitioner).setKeyOrdering(ordering)
   }
 
 }
