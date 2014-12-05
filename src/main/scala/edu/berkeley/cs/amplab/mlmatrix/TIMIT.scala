@@ -65,7 +65,7 @@ object TIMIT extends Logging with Serializable {
     val unregularizedNorm = computeResidualNorm(A,b,xComputed)
     val normX = norm(xComputed.toDenseVector)
 
-    scala.math.sqrt(unregularizedNorm*unregularizedNorm + lambda*normX*normX)
+    (scala.math.sqrt(unregularizedNorm*unregularizedNorm + lambda*normX*normX), unregularizedNorm*unregularizedNorm, lambda*normX*normX)
   }
 
 
@@ -117,7 +117,7 @@ object TIMIT extends Logging with Serializable {
       p.data.grouped(p.rows).toSeq.transpose.map(y => y.toArray)
     }
 
-    val predictedLabels = topKClassifier(5, predictionArray)
+    val predictedLabels = topKClassifier(1, predictionArray)
     val errPercent = getErrPercent(predictedLabels, actualLabels, numTestImages)
     errPercent
   }
@@ -168,11 +168,11 @@ object TIMIT extends Logging with Serializable {
     val timitTrainRDD = loadMatrixFromFile(sc, timitTrainFilename, parts)
     val timitTestRDD = loadMatrixFromFile(sc, timitTestFilename, parts)
     val timitBRDD = loadMatrixFromFile(sc, timitBFilename, parts)
-    println("TIMIT train partitions size: " + timitTrainRDD.partitions.size)
-    println("TIMIT b partitions size: " + timitBRDD.partitions.size)
+    //println("TIMIT train partitions size: " + timitTrainRDD.partitions.size)
+    //println("TIMIT b partitions size: " + timitBRDD.partitions.size)
     // Rows per partition
-    println("Rows per Timit train partition " + timitTrainRDD.mapPartitions(iter => Iterator.single(iter.length)).collect().mkString(" "))
-    println("Rows per Timit b partition " + timitBRDD.mapPartitions(iter => Iterator.single(iter.length)).collect().mkString(" "))
+    //println("Rows per Timit train partition " + timitTrainRDD.mapPartitions(iter => Iterator.single(iter.length)).collect().mkString(" "))
+    //println("Rows per Timit b partition " + timitBRDD.mapPartitions(iter => Iterator.single(iter.length)).collect().mkString(" "))
 
     var timitZipped = timitTrainRDD.zip(timitBRDD).repartition(parts).cache()
 

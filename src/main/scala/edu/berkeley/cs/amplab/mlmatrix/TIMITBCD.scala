@@ -80,7 +80,7 @@ object TimitBCD extends Logging with Serializable {
     val unregularizedNorm = computeResidualNorm(A,b,xComputed)
     val normX = norm(xComputed.toDenseVector)
 
-    scala.math.sqrt(unregularizedNorm*unregularizedNorm + lambda*normX*normX)
+    (scala.math.sqrt(unregularizedNorm*unregularizedNorm + lambda*normX*normX), unregularizedNorm*unregularizedNorm, lambda*normX*normX)
   }
 
   def loadMatrixFromFile(sc: SparkContext, filename: String): RDD[Array[Double]] = {
@@ -139,7 +139,7 @@ object TimitBCD extends Logging with Serializable {
         runningSum = Some(runningSum.get.zip(prediction).map(p => p._1.zip(p._2).map( y =>
           y._1 + y._2)))
       }
-      val predictedLabels = topKClassifier(5, runningSum.get)
+      val predictedLabels = topKClassifier(1, runningSum.get)
       val errPercent = getErrPercent(predictedLabels, actualLabels, numTestImages)
       testErrors(i) = errPercent
     }
