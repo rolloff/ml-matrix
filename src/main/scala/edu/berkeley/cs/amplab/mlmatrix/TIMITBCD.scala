@@ -183,12 +183,12 @@ object TimitBCD extends Logging with Serializable {
     val sc = new SparkContext(conf)
 
     // Daisy filenames
-    val trainFilenames = (1 to 2).map( i => directory + "daisy-aPart" + i.toString + "-" + i.toString + "/")
-    val testFilenames = (1 to 2).map( i => directory + "daisy-testFeatures-test-" + i.toString + "/")
-    val bFilename = directory + "daisy-null-labels/"
+    val trainFilenames = (1 to 2).map( i => directory + "timit-fft-aPart" + i.toString + "-" + i.toString + "/")
+    val testFilenames = (1 to 2).map( i => directory + "timit-fft-testRPM-test-" + i.toString + "/")
+    val bFilename = directory + "timit-fft-null-labels/"
 
     // Actual labels from imagenet
-    val actualLabelsFilename = directory + "imagenet-test-actual/"
+    val actualLabelsFilename = directory + "timit-actual/"
 
     // load matrix RDDs
     val trainRDDs = trainFilenames.map {
@@ -202,15 +202,21 @@ object TimitBCD extends Logging with Serializable {
 
 
     val hp = new HashPartitioner(parts)
-    val trainRDDsPartitioned = trainRDDs.map( trainRDD => trainRDD.zipWithUniqueId.map(x => x.swap).partitionBy(hp).cache())
+    val trainRDDsPartitioned = trainRDDs.map { trainRDD => 
+      Utils.repartitionAndSortWithinPartitions(trainRDD.zipWithUniqueId.map(x => x.swap), hp).cache()
+    }
     trainRDDsPartitioned.foreach(rdd => rdd.count)
-    val bRDDPartitioned = bRDD.zipWithUniqueId.map(x => x.swap).partitionBy(hp).cache()
-    bRDDPartitioned.count()
-
-
     // trains should be a Seq[RowPartitionedMatrix]
     val trains = trainRDDsPartitioned.map(p => RowPartitionedMatrix.fromArray(p.map(_._2)).cache())
+    trains.map(train => train.rdd.count)
+    trainRDDsPartitioned.map(train => train.unpersist())
+
+    val bRDDPartitioned = Utils.repartitionAndSortWithinPartitions(
+      bRDD.zipWithUniqueId.map(x => x.swap), hp).cache()
+    bRDDPartitioned.count()
     val b = RowPartitionedMatrix.fromArray(bRDDPartitioned.map(_._2)).cache()
+    b.rdd.count
+    bRDDPartitioned.unpersist()
 
     // Load text file as array of ints
     val actualLabelsRDD = sc.textFile(actualLabelsFilename).map { line =>
@@ -220,20 +226,22 @@ object TimitBCD extends Logging with Serializable {
     val hpTest = new HashPartitioner(16)
 
     // NOTE: We need to do this as test data has different number of entries per partition
-    val testRDDsPartitioned = testRDDs.map(testRDD => testRDD.zipWithUniqueId.map(x => x.swap).partitionBy(hpTest).cache())
+    val testRDDsPartitioned = testRDDs.map { testRDD => 
+      Utils.repartitionAndSortWithinPartitions(testRDD.zipWithUniqueId.map(x => x.swap), hpTest).cache()
+    }
     testRDDsPartitioned.foreach(rdd => rdd.count)
-    val actualLabelsRDDPartitioned = actualLabelsRDD.zipWithUniqueId.map(x => x.swap).partitionBy(hpTest).cache()
+    val tests = testRDDsPartitioned.map(p => RowPartitionedMatrix.fromArray(p.map(_._2)).cache())
+    tests.map(test => test.rdd.count())
+    testRDDsPartitioned.map(train => train.unpersist())
+
+    val actualLabelsRDDPartitioned = Utils.repartitionAndSortWithinPartitions(
+      actualLabelsRDD.zipWithUniqueId.map(x => x.swap), hpTest).cache()
     actualLabelsRDDPartitioned.count
 
-    val tests = testRDDsPartitioned.map(p => RowPartitionedMatrix.fromArray(p.map(_._2)).cache())
-
     val actualLabels = actualLabelsRDDPartitioned.map(_._2).cache()
+    actualLabels.count
+    actualLabelsRDDPartitioned.unpersist()
 
-    // Unpersist the RDDs
-    trains.map(train => train.rdd.unpersist())
-    b.rdd.unpersist()
-
-    tests.map(test => test.rdd.unpersist())
     val rowPartitionedSolver = getSolver(solver, numIterationsSGD, stepSize, miniBatchFraction)
 
     // Solve for daisy x
