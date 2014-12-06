@@ -87,6 +87,8 @@ object FusionBCD extends Logging with Serializable {
         runningSum = Some((runningSum.get + Ax).asInstanceOf[RowPartitionedMatrix])
       }
 
+      runningSum.get.cache()
+
       val residualNorm = (b - runningSum.get).normFrobenius()
       residualNorms(i) = residualNorm
       i = i + 1
@@ -329,22 +331,22 @@ object FusionBCD extends Logging with Serializable {
 
     println("Finished solving for lcsXs")
 
+    val testErrors = calcTestErr(daisyTests, lcsTests, daisyXs, lcsXs,
+      imagenetTestLabels, 0.5, 0.5)
+    println("Test errors : " + testErrors)
+
     val daisyResiduals = computeResidualNormWithL2(daisyTrains, daisyB, daisyXs, lambda)
     val lcsResiduals = computeResidualNormWithL2(lcsTrains, lcsB, lcsXs, lambda)
 
     println("Daisy Residuals " + daisyResiduals.mkString(" "))
     println("LCS Residuals " + lcsResiduals.mkString(" "))
 
-    val daisyConditionNumbers = daisyTrains.map(daisyTrain => daisyTrain.condEst())
-    val lcsConditionNumbers = lcsTrains.map(lcsTrain => lcsTrain.condEst())
+    // val daisyConditionNumbers = daisyTrains.map(daisyTrain => daisyTrain.condEst())
+    // val lcsConditionNumbers = lcsTrains.map(lcsTrain => lcsTrain.condEst())
 
-    println("DaisyConditionNumbers : " + daisyConditionNumbers)
-    println("LCSConditionNumbers : " + lcsConditionNumbers)
+    // println("DaisyConditionNumbers : " + daisyConditionNumbers)
+    // println("LCSConditionNumbers : " + lcsConditionNumbers)
 
     println("DaisyTime, lcsTime " + (daisyTime, lcsTime))
-
-    val testErrors = calcTestErr(daisyTests, lcsTests, daisyXs, lcsXs,
-      imagenetTestLabels, 0.5, 0.5)
-    println("Test errors : " + testErrors)
   }
 }
