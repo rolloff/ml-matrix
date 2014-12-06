@@ -14,7 +14,7 @@ SGD_MINI_BATCH_FRACTION=0.05
 
 SPARK_MASTER=`cat /root/spark-ec2/cluster-url`
 
-ID=fusionBCD-imagenet-$PARTS-$SOLVER-$LAMBDA-$BCD_NUM_ITERS-$SGD_STEP_SIZE-$SGD_NUM_ITERS-$SGD_MINI_BATCH_FRACTION-`date +"%Y_%m_%d_%H_%M_%S"`
+ID=timitBCD-imagenet-$PARTS-$SOLVER-$LAMBDA-$BCD_NUM_ITERS-$SGD_STEP_SIZE-$SGD_NUM_ITERS-$SGD_MINI_BATCH_FRACTION-`date +"%Y_%m_%d_%H_%M_%S"`
 
 /root/spark/bin/spark-submit \
   --class edu.berkeley.cs.amplab.mlmatrix.TimitBCD \
