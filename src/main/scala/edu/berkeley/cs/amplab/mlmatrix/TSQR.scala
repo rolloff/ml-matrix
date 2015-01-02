@@ -203,6 +203,7 @@ class TSQR extends RowPartitionedSolver with Logging with Serializable {
         // look up breeze method to save out to csv
 
         //csvwrite(new File("RMatrix-"+ scala.util.Random.nextInt),  reduced._1)
+        // csvwrite(new File("RMatrix-"+ scala.util.Random.nextInt),  rFinal)
         //println("Diagonal elements of stacked R: " + diag(reduced._1).toArray.mkString(" "))
         reduced._1 \ reduced._2
       }
@@ -255,6 +256,7 @@ class TSQR extends RowPartitionedSolver with Logging with Serializable {
         val lambdaRB = (DenseMatrix.eye[Double](rFinal.cols) :* math.sqrt(lambda),
           new DenseMatrix[Double](rFinal.cols, bFinal.cols))
         val reduced = reduceQRSolve(localQR, (rFinal, bFinal), lambdaRB)
+        //csvwrite(new File("RMatrix-"+ scala.util.Random.nextInt),  rFinal)
         reduced._1 \ reduced._2
       }
       out

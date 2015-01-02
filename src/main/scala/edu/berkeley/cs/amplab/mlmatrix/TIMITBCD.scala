@@ -63,24 +63,48 @@ object TimitBCD extends Logging with Serializable {
         new TSQR()
     }
   }
-  def computeResidualNorm(A: RowPartitionedMatrix,
+
+  def computeResidualNorms(aTrains: Seq[RowPartitionedMatrix],
       b: RowPartitionedMatrix,
-      xComputed: DenseMatrix[Double]) = {
-    val xBroadcast = A.rdd.context.broadcast(xComputed)
-    val axComputed = A.mapPartitions { part =>
-      part*xBroadcast.value
+      xComputeds: Seq[DenseMatrix[Double]]) = {
+
+    val l = aTrains.length
+    var i = 0
+
+    val residualNorms = new Array[Double](l)
+
+    var runningSum : Option[RowPartitionedMatrix] = None
+    while (i < l) {
+      val A = aTrains(i)
+      val xBroadcast = A.rdd.context.broadcast(xComputeds(i))
+      val Ax = A.mapPartitions { part =>
+        part*xBroadcast.value
+      }
+
+      if (runningSum.isEmpty) {
+        runningSum = Some(Ax)
+      } else {
+        runningSum = Some((runningSum.get + Ax).asInstanceOf[RowPartitionedMatrix])
+      }
+
+      runningSum.get.cache()
+
+      val residualNorm = (b - runningSum.get).normFrobenius()
+      residualNorms(i) = residualNorm
+      i = i + 1
     }
-    val residualNorm = (b - axComputed).normFrobenius()
-    residualNorm
+    residualNorms
   }
 
-  def computeResidualNormWithL2(A: RowPartitionedMatrix,
+  def computeResidualNormWithL2(aTrains: Seq[RowPartitionedMatrix],
       b: RowPartitionedMatrix,
-      xComputed: DenseMatrix[Double], lambda: Double) = {
-    val unregularizedNorm = computeResidualNorm(A,b,xComputed)
-    val normX = norm(xComputed.toDenseVector)
+      xComputeds: Seq[DenseMatrix[Double]], lambda: Double) = {
+    val unregularizedNorms = computeResidualNorms(aTrains ,b,xComputeds)
+    val normXs = xComputeds.map(xComputed => norm(xComputed.toDenseVector))
 
-    (scala.math.sqrt(unregularizedNorm*unregularizedNorm + lambda*normX*normX), unregularizedNorm*unregularizedNorm, lambda*normX*normX)
+    unregularizedNorms.zip(normXs).map { li =>
+      scala.math.sqrt(li._1*li._1 + lambda*li._2*li._2)
+    }
   }
 
   def loadMatrixFromFile(sc: SparkContext, filename: String): RDD[Array[Double]] = {
@@ -183,8 +207,8 @@ object TimitBCD extends Logging with Serializable {
     val sc = new SparkContext(conf)
 
     // Daisy filenames
-    val trainFilenames = (1 to 2).map( i => directory + "timit-fft-aPart" + i.toString + "-" + i.toString + "/")
-    val testFilenames = (1 to 2).map( i => directory + "timit-fft-testRPM-test-" + i.toString + "/")
+    val trainFilenames = (1 to 5).map( i => directory + "timit-fft-aPart" + i.toString + "-" + i.toString + "/")
+    val testFilenames = (1 to 5).map( i => directory + "timit-fft-testRPM-test-" + i.toString + "/")
     val bFilename = directory + "timit-fft-null-labels/"
 
     // Actual labels from imagenet
@@ -254,15 +278,14 @@ object TimitBCD extends Logging with Serializable {
 
     println("Finished solving for xs")
 
-    val residuals = trains.zip(xs).map { case (train, x) =>
-      computeResidualNormWithL2(train, b, x, lambda)
-    }
-
-    println("Residuals " + residuals.mkString(" "))
-    val conditionNumbers = trains.map(train => train.condEst())
-    println("ConditionNumbers : " + conditionNumbers)
-    println("Time: " + time)
     val testErrors = calcTestErr(tests, xs, actualLabels)
     println("Test errors : " + testErrors)
+
+    val residuals = computeResidualNormWithL2(trains, b, xs, lambda)
+
+    println("Residuals " + residuals.mkString(" "))
+    //val conditionNumbers = trains.map(train => train.condEst())
+    //println("ConditionNumbers : " + conditionNumbers)
+    println("Time: " + time)
   }
 }
