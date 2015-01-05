@@ -229,6 +229,13 @@ class RowPartitionedMatrix(
       f(lm.mat)
     })
   }
+
+  // Delete specific columns from the matrix
+  def delete(cols: Seq[Int], axis: Axis._1.type) = {
+    RowPartitionedMatrix.fromMatrix(rdd.map { lm =>
+      lm.mat.delete(cols, axis)
+    })
+  }
 }
 
 object RowPartitionedMatrix {

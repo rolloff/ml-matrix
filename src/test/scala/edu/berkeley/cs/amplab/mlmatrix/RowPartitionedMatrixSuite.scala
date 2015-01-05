@@ -2,6 +2,7 @@ package edu.berkeley.cs.amplab.mlmatrix
 
 import org.scalatest.FunSuite
 import org.apache.spark.SparkContext
+import breeze.linalg._
 
 class RowPartitionedMatrixSuite extends FunSuite with LocalSparkContext with Logging {
 
@@ -83,5 +84,28 @@ class RowPartitionedMatrixSuite extends FunSuite with LocalSparkContext with Log
 
     assert(testMat(Range(2, 2), Range(1, 3)).collect().toArray.isEmpty)
   }
+
+  test("delete(cols, axis)") {
+    sc = new SparkContext("local", "test")
+    val testMat = RowPartitionedMatrix.fromArray(
+      sc.parallelize(Seq(
+        Array[Double](1, 2, 3),
+        Array[Double](1, 9, -1),
+        Array[Double](0, 0, 1),
+        Array[Double](0, 1, 0)
+      ), 2), // row-major, laid out as is
+      Seq(2, 2),
+      3
+    )
+
+    val testMatTruncated = testMat.delete(Seq(0, 2), Axis._1)
+
+    assert(testMatTruncated.collect().toArray === Array(2, 9, 0, 1),
+    "delete(cols, axis) does not return correct answers!")
+    assert(testMatTruncated.numRows() === 4, "delete(cols, axis) returns a result with incorrect row count!")
+    assert(testMatTruncated.numCols() === 1, "delete(cols, axis) returns a result with incorrect col count!")
+  }
+
+
 
 }
