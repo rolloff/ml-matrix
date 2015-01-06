@@ -48,79 +48,6 @@ object TIMIT extends Logging with Serializable {
     }
   }
 
-  def computeResidualNorm(A: RowPartitionedMatrix,
-      b: RowPartitionedMatrix,
-      xComputed: DenseMatrix[Double]) = {
-    val xBroadcast = A.rdd.context.broadcast(xComputed)
-    val axComputed = A.mapPartitions { part =>
-      part*xBroadcast.value
-    }
-    val residualNorm = (b - axComputed).normFrobenius()
-    residualNorm
-  }
-
-  def computeResidualNormWithL2(A: RowPartitionedMatrix,
-      b: RowPartitionedMatrix,
-      xComputed: DenseMatrix[Double], lambda: Double) = {
-    val unregularizedNorm = computeResidualNorm(A,b,xComputed)
-    val normX = norm(xComputed.toDenseVector)
-
-    (scala.math.sqrt(unregularizedNorm*unregularizedNorm + lambda*normX*normX), unregularizedNorm*unregularizedNorm, lambda*normX*normX)
-  }
-
-
-  def loadMatrixFromFile(sc: SparkContext, filename: String, parts: Int): RDD[Array[Double]] = {
-    sc.textFile(filename, parts).map { line =>
-      line.split(",").map(y => y.toDouble)
-    }
-  }
-
-  def getErrPercent(predicted: RDD[Array[Int]], actual: RDD[Array[Int]], numTestImages: Int): Double = {
-    // FIXME: Each image only has one actual label, so actual should be an RDD[Int]
-    val totalErr = predicted.zip(actual).map({ case (topKLabels, actualLabel) =>
-      if (topKLabels.contains(actualLabel(0))) {
-        0.0
-      } else {
-        1.0
-      }
-    }).reduce(_ + _)
-
-    val errPercent = totalErr / numTestImages * 100.0
-    errPercent
-  }
-
-  def topKClassifier(k: Int, in: RDD[Array[Double]]) : RDD[Array[Int]] = {
-    // Returns top k indices with maximum value
-    in.map { ary =>
-      ary.toSeq.zipWithIndex.sortBy(_._1).takeRight(k).map(_._2).toArray
-    }
-    // in.map { ary => argtopk(ary, k).toArray }
-  }
-
-
-  def calcTestErr(test: RowPartitionedMatrix,
-    x: DenseMatrix[Double],
-    actualLabels: RDD[Array[Int]]): Double = {
-
-    // Compute number of test images
-    val numTestImages = test.numRows().toInt
-
-    // Broadcast x
-    val xBroadcast = test.rdd.context.broadcast(x)
-
-    // Calculate predictions
-    val prediction = test.rdd.map { mat =>
-      mat.mat * xBroadcast.value
-    }
-
-    val predictionArray = prediction.flatMap { p =>
-      p.data.grouped(p.rows).toSeq.transpose.map(y => y.toArray)
-    }
-
-    val predictedLabels = topKClassifier(1, predictionArray)
-    val errPercent = getErrPercent(predictedLabels, actualLabels, numTestImages)
-    errPercent
-  }
 
   def main(args: Array[String]) {
     if (args.length < 5) {
@@ -165,9 +92,9 @@ object TIMIT extends Logging with Serializable {
     val timitActualFilename = directory + "timit-actual/"
 
     // load matrix RDDs
-    val timitTrainRDD = loadMatrixFromFile(sc, timitTrainFilename, parts)
-    val timitTestRDD = loadMatrixFromFile(sc, timitTestFilename, parts)
-    val timitBRDD = loadMatrixFromFile(sc, timitBFilename, parts)
+    val timitTrainRDD = Utils.loadMatrixFromFile(sc, timitTrainFilename, parts)
+    val timitTestRDD = Utils.loadMatrixFromFile(sc, timitTestFilename, parts)
+    val timitBRDD = Utils.loadMatrixFromFile(sc, timitBFilename, parts)
     //println("TIMIT train partitions size: " + timitTrainRDD.partitions.size)
     //println("TIMIT b partitions size: " + timitBRDD.partitions.size)
     // Rows per partition
@@ -219,7 +146,7 @@ object TIMIT extends Logging with Serializable {
 
     println("Norm of timt B "+ timitB.normFrobenius())
 
-    val timitResidual = computeResidualNormWithL2(timitTrain, timitB, timitX, lambda)
+    val timitResidual = Utils.computeResidualNormWithL2(timitTrain, timitB, timitX, lambda)
     println("Finished computing the residuals " + timitResidual)
 
     println("Condition number, residual norm, time")
@@ -227,7 +154,7 @@ object TIMIT extends Logging with Serializable {
     println("Timit: " + timitTrain.condEst(Some(timitR)) + " " + timitResidual + " " + timitTime)
     println("SVDs of timitTrain " + timitTrain.svds(Some(timitR)).toArray.mkString(" "))
 
-    val testError = calcTestErr(timitTest, timitX, timitActual)
+    val testError = Utils.calcTestErr(timitTest, timitX, timitActual)
     println(testError)
   }
 }

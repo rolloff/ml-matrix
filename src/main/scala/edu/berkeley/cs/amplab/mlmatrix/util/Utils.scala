@@ -3,11 +3,14 @@ package edu.berkeley.cs.amplab.mlmatrix.util
 import scala.reflect.ClassTag
 import scala.util.Random
 
+import org.apache.spark.SparkContext
 import org.apache.spark.SparkContext._
 import org.apache.spark.HashPartitioner
 import org.apache.spark.Partitioner
 import org.apache.spark.rdd.RDD
 import org.apache.spark.rdd.ShuffledRDD
+
+import edu.berkeley.cs.amplab.mlmatrix.RowPartitionedMatrix
 
 import breeze.linalg._
 
@@ -141,6 +144,77 @@ object Utils {
   def repartitionAndSortWithinPartitions[K : Ordering : ClassTag, V: ClassTag](rdd: RDD[(K, V)], partitioner: Partitioner): RDD[(K, V)] = {
     val ordering = implicitly[Ordering[K]]
     new ShuffledRDD[K, V, V](rdd, partitioner).setKeyOrdering(ordering)
+  }
+
+  def getErrPercent(predicted: RDD[Array[Int]], actual: RDD[Array[Int]], numTestImages: Int): Double = {
+    // FIXME: Each image only has one actual label, so actual should be an RDD[Int]
+    val totalErr = predicted.zip(actual).map({ case (topKLabels, actualLabel) =>
+      if (topKLabels.contains(actualLabel(0))) {
+        0.0
+      } else {
+        1.0
+      }
+    }).reduce(_ + _)
+
+    val errPercent = totalErr / numTestImages * 100.0
+    errPercent
+  }
+
+  def topKClassifier(k: Int, in: RDD[Array[Double]]) : RDD[Array[Int]] = {
+    // Returns top k indices with maximum value
+    in.map { ary =>
+      ary.toSeq.zipWithIndex.sortBy(_._1).takeRight(k).map(_._2).toArray
+    }
+  }
+
+  def calcTestErr(test: RowPartitionedMatrix,
+    x: DenseMatrix[Double],
+    actualLabels: RDD[Array[Int]]): Double = {
+
+    // Compute number of test images
+    val numTestImages = test.numRows().toInt
+
+    // Broadcast x
+    val xBroadcast = test.rdd.context.broadcast(x)
+
+    // Calculate predictions
+    val prediction = test.rdd.map { mat =>
+      mat.mat * xBroadcast.value
+    }
+
+    val predictionArray = prediction.flatMap { p =>
+      p.data.grouped(p.rows).toSeq.transpose.map(y => y.toArray)
+    }
+
+    val predictedLabels = topKClassifier(1, predictionArray)
+    val errPercent = getErrPercent(predictedLabels, actualLabels, numTestImages)
+    errPercent
+  }
+
+  def computeResidualNorm(A: RowPartitionedMatrix,
+    b: RowPartitionedMatrix,
+    xComputed: DenseMatrix[Double]) = {
+      val xBroadcast = A.rdd.context.broadcast(xComputed)
+      val axComputed = A.mapPartitions { part =>
+        part*xBroadcast.value
+      }
+    val residualNorm = (b - axComputed).normFrobenius()
+    residualNorm
+  }
+
+  def computeResidualNormWithL2(A: RowPartitionedMatrix,
+    b: RowPartitionedMatrix,
+    xComputed: DenseMatrix[Double], lambda: Double) = {
+    val unregularizedNorm = computeResidualNorm(A,b,xComputed)
+    val normX = norm(xComputed.toDenseVector)
+
+    scala.math.sqrt(unregularizedNorm*unregularizedNorm + lambda*normX*normX)
+  }
+
+  def loadMatrixFromFile(sc: SparkContext, filename: String, parts: Int): RDD[Array[Double]] = {
+    sc.textFile(filename, parts).map { line =>
+      line.split(",").map(y => y.toDouble)
+    }
   }
 
 }

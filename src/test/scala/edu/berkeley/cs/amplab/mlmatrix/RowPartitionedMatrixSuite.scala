@@ -106,6 +106,27 @@ class RowPartitionedMatrixSuite extends FunSuite with LocalSparkContext with Log
     assert(testMatTruncated.numCols() === 1, "delete(cols, axis) returns a result with incorrect col count!")
   }
 
+  test("horzcat(other)") {
+    sc = new SparkContext("local", "test")
+    val testMat = RowPartitionedMatrix.fromArray(
+      sc.parallelize(Seq(
+        Array[Double](1, 2, 3),
+        Array[Double](1, 9, -1),
+        Array[Double](0, 0, 1),
+        Array[Double](0, 1, 0)
+      ), 2), // row-major, laid out as is
+      Seq(2, 2),
+      3
+    )
+
+    val result = testMat.horzcat(testMat)
+    assert(result.collect() === DenseMatrix((1, 2, 3, 1, 2, 3), (1, 9, -1, 1, 9, -1), (0, 0, 1, 0, 0, 1), (0, 1, 0, 0, 1, 0)),
+     "horzcat() returns incorrect answer")
+    assert(result.numRows() === 4, "horzcat() returns a result with incorrect row count")
+    assert(result.numCols() === 6, "horzcat() returns a result with incorrect col count")
+
+  }
+
 
 
 }

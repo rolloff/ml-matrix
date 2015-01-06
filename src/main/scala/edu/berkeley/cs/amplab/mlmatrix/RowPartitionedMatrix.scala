@@ -236,6 +236,13 @@ class RowPartitionedMatrix(
       lm.mat.delete(cols, axis)
     })
   }
+
+  // Matrix horizontal concatenate
+  def horzcat(other: RowPartitionedMatrix) = {
+    RowPartitionedMatrix.fromMatrix( rdd.zip(other.rdd).map { p =>
+      DenseMatrix.horzcat(p._1.mat, p._2.mat)
+    })
+  }
 }
 
 object RowPartitionedMatrix {
