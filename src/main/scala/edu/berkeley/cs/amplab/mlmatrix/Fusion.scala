@@ -193,7 +193,7 @@ object Fusion extends Logging with Serializable {
     testZipped.unpersist()
 
     // Remove unecessary columns from Daisy
-    val colIndices = fromFile("/Users/becca/git/ml-matrix/daisy-0-column-indices.txt").getLines.map(x=>x.toInt).toList
+    val colIndices = fromFile(directory + "daisy-0-column-indices.txt").getLines.map(x=>x.toInt).toList
     daisyTrain = daisyTrain.delete(colIndices, Axis._1)
     daisyTest = daisyTest.delete(colIndices, Axis._1)
 
