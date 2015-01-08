@@ -25,7 +25,7 @@ object QRUtils {
     // we do this by sending -1 as lwork to the lapack function
     val scratch, work = new Array[Double](1)
     val info = new intW(0)
-    lapack.dgeqrf(m, n, scratch, m, scratch, work, -1, info)
+    println("m is " + m + " n is " + n + " now call lapack " + lapack.dgeqrf(m, n, scratch, m, scratch, work, -1, info))
     val lwork1 = if(info.`val` != 0) n else work(0).toInt
     val workspace = new Array[Double](lwork1)
 
