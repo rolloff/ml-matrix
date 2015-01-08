@@ -193,9 +193,9 @@ object Fusion extends Logging with Serializable {
     testZipped.unpersist()
 
     // Remove unecessary columns from Daisy
-    val colIndices = fromFile(directory + "daisy-0-column-indices.txt").getLines.map(x=>x.toInt).toList
-    daisyTrain = daisyTrain.delete(colIndices, Axis._1)
-    daisyTest = daisyTest.delete(colIndices, Axis._1)
+    //val colIndices = fromFile(directory + "daisy-0-column-indices.txt").getLines.map(x=>x.toInt).toList
+    //daisyTrain = daisyTrain.delete(colIndices, Axis._1)
+    //daisyTest = daisyTest.delete(colIndices, Axis._1)
 
     // Compute daisy and LCS row norms
     /*
