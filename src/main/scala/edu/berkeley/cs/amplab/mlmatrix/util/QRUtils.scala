@@ -19,6 +19,7 @@ object QRUtils {
     println("Inside qrYTR")
     val m = A.rows
     val n = A.cols
+    println("m is " + m "and n is " + n)
 
     // Get optimal workspace size
     // we do this by sending -1 as lwork to the lapack function
