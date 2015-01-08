@@ -36,6 +36,7 @@ object QRUtils {
     } else {
       A
     }
+    println("m is " + m + "n is " + n)
     lapack.dgeqrf(m, n, outputMat.data, m, tau, workspace, workspace.length, info)
 
     // Error check
