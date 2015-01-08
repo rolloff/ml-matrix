@@ -10,11 +10,11 @@
 
 /root/ephemeral-hdfs/bin/hadoop distcp s3n://imagenet-linear-solver-data/imagenet-test-actual /imagenet-test-actual
 
-for i in `seq 2 5`
-do
-  /root/ephemeral-hdfs/bin/hadoop distcp s3n://imagenet-linear-solver-data/daisy-aPart$i-$i /daisy-aPart$i-$i
-  /root/ephemeral-hdfs/bin/hadoop distcp s3n://imagenet-linear-solver-data/daisy-testFeatures-test-$i /daisy-testFeatures-test-$i
-
-  /root/ephemeral-hdfs/bin/hadoop distcp s3n://imagenet-linear-solver-data/lcs-aPart$i-$i /lcs-aPart$i-$i
-  /root/ephemeral-hdfs/bin/hadoop distcp s3n://imagenet-linear-solver-data/lcs-testFeatures-test-$i /lcs-testFeatures-test-$i
-done
+#for i in `seq 2 5`
+#do
+#  /root/ephemeral-hdfs/bin/hadoop distcp s3n://imagenet-linear-solver-data/daisy-aPart$i-$i /daisy-aPart$i-$i
+#  /root/ephemeral-hdfs/bin/hadoop distcp s3n://imagenet-linear-solver-data/daisy-testFeatures-test-$i /daisy-testFeatures-test-$i
+#
+#  /root/ephemeral-hdfs/bin/hadoop distcp s3n://imagenet-linear-solver-data/lcs-aPart$i-$i /lcs-aPart$i-$i
+#  /root/ephemeral-hdfs/bin/hadoop distcp s3n://imagenet-linear-solver-data/lcs-testFeatures-test-$i /lcs-testFeatures-test-$i
+#done
