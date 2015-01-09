@@ -221,6 +221,16 @@ object Fusion extends Logging with Serializable {
     // Combine problems
     val train = daisyTrain.horzcat(lcsTrain)
     val test = daisyTest.horzcat(lcsTest)
+    println("train rows " + train.numRows() + "train cols " + train.numCols())
+    val rowsPerPartition = train.rdd.mapPartitionsWithIndex { case (part, iter) =>
+      if (iter.isEmpty) {
+        Iterator()
+      } else {
+        iter.zipWithIndex.map(x => (part, x._2, x._1.mat.rows.toLong))
+      }
+    }.collect().sortBy(x => (x._1, x._2))
+    println(rowsPerPartition)
+
     // Solve for x
     var begin = System.nanoTime()
     val x = solveForX(train, daisyB, solver, lambda, numIterations, stepSize, miniBatchFraction)
