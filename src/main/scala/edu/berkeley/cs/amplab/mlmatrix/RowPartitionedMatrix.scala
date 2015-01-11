@@ -239,12 +239,12 @@ class RowPartitionedMatrix(
 
   // Matrix horizontal concatenate
   def horzcat(other: RowPartitionedMatrix) = {
-    val newRdd: RDD[DenseMatrix[Double]] = rdd.zip(other.rdd).map { p =>
+    val newRDD: RDD[DenseMatrix[Double]] = rdd.zip(other.rdd).map { p =>
       DenseMatrix.horzcat(p._1.mat, p._2.mat)
     }
-    val cols: Array[Int] = newRdd.map { p => p.cols.toInt}.collect()
+    val cols: Array[Int] = newRDD.map { p => p.cols.toInt}.collect()
     println(cols.slice(0, 10).mkString(" "))
-    RowPartitionedMatrix.fromMatrix(newRdd)
+    RowPartitionedMatrix.fromMatrix(newRDD, newRDD.count(), cols(0).toLong)
   }
 }
 
@@ -253,6 +253,10 @@ object RowPartitionedMatrix {
   // Convert an RDD[DenseMatrix[Double]] to an RDD[RowPartition]
   def fromMatrix(matrixRDD: RDD[DenseMatrix[Double]]): RowPartitionedMatrix = {
     new RowPartitionedMatrix(matrixRDD.map(mat => RowPartition(mat)))
+  }
+
+  def fromMatrix(matrixRDD: RDD[DenseMatrix[Double]], rows: Long, cols: Long): RowPartitionedMatrix = {
+    new RowPartitionedMatrix(matrixRDD.map(mat=> RowPartition(mat)), Some(rows), Some(cols) )
   }
 
   def fromArray(matrixRDD: RDD[Array[Double]]): RowPartitionedMatrix = {
