@@ -227,6 +227,7 @@ object Fusion extends Logging with Serializable {
     println("train rows " + train.numRows() + ", train cols " + train.numCols())
 
     // FIXME: figure out what you are printing
+    /*
     val rowsPerPartition = train.rdd.mapPartitionsWithIndex { case (part, iter) =>
       if (iter.isEmpty) {
         Iterator()
@@ -234,6 +235,11 @@ object Fusion extends Logging with Serializable {
         iter.zipWithIndex.map(x => (part, x._2, x._1.mat.rows.toLong))
       }
     }.collect().sortBy(x => (x._1, x._2))
+    */
+    val rowsPerPartition = train.rdd.map { part =>
+      part.mat.rows.toLong
+    }.collect()
+    println(rowsPerPartition(0) + " , " + rowsPerPartition(1))
     println(rowsPerPartition)
 
     // Solve for x

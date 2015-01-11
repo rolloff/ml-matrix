@@ -44,7 +44,7 @@ object QRUtils {
     if (info.`val` > 0)
       throw new NotConvergedException(NotConvergedException.Iterations)
     else if (info.`val` < 0)
-      throw new IllegalArgumentException("info.val is " + info.`val` + ", m is " + m + ", n is " + n + ", tau(0) is " + tau(0) )
+      throw new IllegalArgumentException("info.val is " + info.`val` + ", m is " + m + ", n is " + n)
 
     // Get R
     val R = DenseMatrix.zeros[Double](mind, n)
