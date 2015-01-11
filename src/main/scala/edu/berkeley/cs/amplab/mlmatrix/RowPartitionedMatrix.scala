@@ -244,7 +244,8 @@ class RowPartitionedMatrix(
     }
     val cols: Array[Int] = newRDD.map { p => p.cols.toInt}.collect()
     println(cols.slice(0, 10).mkString(" "))
-    RowPartitionedMatrix.fromMatrix(newRDD, newRDD.count(), cols(0).toLong)
+    RowPartitionedMatrix.fromMatrix(newRDD, this.rows, cols(0).toLong)
+    //RowPartitionedMatrix.fromMatrix(newRDD)
   }
 }
 
