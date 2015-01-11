@@ -19,7 +19,7 @@ object QRUtils {
     println("Inside qrYTR")
     val m = A.rows
     val n = A.cols
-    println("m is " + m + "and n is " + n)
+    println("m is " + m + ", n is " + n)
 
     // Get optimal workspace size
     // we do this by sending -1 as lwork to the lapack function
@@ -44,8 +44,7 @@ object QRUtils {
     if (info.`val` > 0)
       throw new NotConvergedException(NotConvergedException.Iterations)
     else if (info.`val` < 0)
-      println("info.val is " + info.`val`)
-      throw new IllegalArgumentException("info.val is " + info.`val` + " m is " + m + " n is " + n + "tau(0) is " + tau(0) )
+      throw new IllegalArgumentException("info.val is " + info.`val` + ", m is " + m + ", n is " + n + ", tau(0) is " + tau(0) )
 
     // Get R
     val R = DenseMatrix.zeros[Double](mind, n)

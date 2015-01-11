@@ -218,13 +218,13 @@ object Fusion extends Logging with Serializable {
     println("LCS Row norms highest " + lcsRowNorms.takeRight(10).mkString(","))
     */
 
-    println("daisyTrain rows " + daisyTrain.numRows() + "daisyTrain cols " + daisyTrain.numCols())
-    println("lcsTrain rows " + lcsTrain.numRows() + "lcsTrain cols " + lcsTrain.numCols())
+    println("daisyTrain rows " + daisyTrain.numRows() + ", daisyTrain cols " + daisyTrain.numCols())
+    println("lcsTrain rows " + lcsTrain.numRows() + ", lcsTrain cols " + lcsTrain.numCols())
 
     // Combine problems
     val train = daisyTrain.horzcat(lcsTrain)
     val test = daisyTest.horzcat(lcsTest)
-    println("train rows " + train.numRows() + "train cols " + train.numCols())
+    println("train rows " + train.numRows() + ", train cols " + train.numCols())
 
     // FIXME: figure out what you are printing
     val rowsPerPartition = train.rdd.mapPartitionsWithIndex { case (part, iter) =>
