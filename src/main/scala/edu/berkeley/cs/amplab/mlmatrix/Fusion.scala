@@ -239,8 +239,8 @@ object Fusion extends Logging with Serializable {
     val rowsPerPartition = train.rdd.map { part =>
       part.mat.rows.toLong
     }.collect()
-    println(rowsPerPartition(0) + " , " + rowsPerPartition(1))
-    println(rowsPerPartition)
+    println(rowsPerPartition.slice(0, 10).mkString(" "))
+
 
     // Solve for x
     var begin = System.nanoTime()
