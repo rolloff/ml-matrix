@@ -243,9 +243,11 @@ class TSQR extends RowPartitionedSolver with Logging with Serializable {
         QRUtils.qrSolveMany(aPart, bParts)
       }
     }
+    println("Done creating initial qrTree ")
 
     val qrResult = Utils.treeReduce(qrTree, reduceQRSolveMany,
       depth=math.ceil(math.log(A.rdd.partitions.size)/math.log(2)).toInt)
+      
     val rFinal = qrResult._1
 
     val results = lambdas.zip(qrResult._2).map { case (lambda, bFinal) =>

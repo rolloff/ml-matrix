@@ -2,7 +2,7 @@
 set -x #echo on
 
 SPARK_MEM=8g
-SPARK_MASTER="local"
+SPARK_MASTER="spark://Beccas-MacBook-Pro.local:7077"
 DATA_DIR="imagenet-linear-solver-data/"
 PARTS=8
 LAMBDA=0.1

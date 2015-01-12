@@ -225,17 +225,8 @@ object Fusion extends Logging with Serializable {
     val train = daisyTrain.horzcat(lcsTrain)
     val test = daisyTest.horzcat(lcsTest)
     println("train rows " + train.numRows() + ", train cols " + train.numCols())
+    println("test rows " + test.numRows() + ", test cols " + test.numCols())
 
-    // FIXME: figure out what you are printing
-    /*
-    val rowsPerPartition = train.rdd.mapPartitionsWithIndex { case (part, iter) =>
-      if (iter.isEmpty) {
-        Iterator()
-      } else {
-        iter.zipWithIndex.map(x => (part, x._2, x._1.mat.rows.toLong))
-      }
-    }.collect().sortBy(x => (x._1, x._2))
-    */
     val rowsPerPartition = train.rdd.map { part =>
       part.mat.rows.toLong
     }.collect()
