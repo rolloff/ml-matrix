@@ -47,38 +47,6 @@ object Fusion extends Logging with Serializable {
     }
   }
 
-  def calcFusedTestErr(daisyTest: RowPartitionedMatrix, lcsTest: RowPartitionedMatrix,
-    daisyX: DenseMatrix[Double], lcsX: DenseMatrix[Double],
-    actualLabels: RDD[Array[Int]],
-    daisyWt: Double, lcsWt: Double): Double = {
-
-    // Compute number of test images
-    val numTestImages = daisyTest.numRows().toInt
-
-    // Broadcast x
-    val daisyXBroadcast = daisyTest.rdd.context.broadcast(daisyX)
-    val lcsXBroadcast = lcsTest.rdd.context.broadcast(lcsX)
-
-    // Calculate predictions
-    val daisyPrediction = daisyTest.rdd.map { mat =>
-      mat.mat * daisyXBroadcast.value
-    }
-    val lcsPrediction = lcsTest.rdd.map { mat =>
-      mat.mat * lcsXBroadcast.value
-    }
-
-    // Fuse b matrices
-    val fusedPrediction = daisyPrediction.zip(lcsPrediction).flatMap { p =>
-      val fused = (p._1*daisyWt + p._2*lcsWt)
-      // Convert from DenseMatrix to Array[Array[Double]]
-      fused.data.grouped(fused.rows).toSeq.transpose.map(x => x.toArray)
-    }
-
-    val predictedLabels = Utils.topKClassifier(5, fusedPrediction)
-    val errPercent = Utils.getErrPercent(predictedLabels, actualLabels, numTestImages)
-    errPercent
-  }
-
   def main(args: Array[String]) {
     if (args.length < 5) {
       println("Usage: Fusion <master> <data_dir> <parts> <solver: tsqr|normal|sgd|local> <lambda> [<stepsize> <numIters> <miniBatchFraction>]")
@@ -241,7 +209,7 @@ object Fusion extends Logging with Serializable {
     println("Finished solving for x in " + time + " ms" )
     val residual = Utils.computeResidualNormWithL2(train, daisyB, x, lambda)
     println("Combined solve residual is " + residual)
-    val combinedTestError = Utils.calcTestErr(test, x, imagenetTestLabels)
+    val combinedTestError = Utils.calcTestErr(test, x, imagenetTestLabels, 5)
     println("Combined solve test error is " + combinedTestError)
 
 
@@ -263,8 +231,15 @@ object Fusion extends Logging with Serializable {
     val daisyResidual = Utils.computeResidualNormWithL2(daisyTrain, daisyB, daisyX, lambda)
     val lcsResidual = Utils.computeResidualNormWithL2(lcsTrain, lcsB, lcsX, lambda)
     println("Finished computing the residuals " + daisyResidual + " " + lcsResidual)
-    val testError = calcFusedTestErr(daisyTest, lcsTest, daisyX, lcsX, imagenetTestLabels, 0.5, 0.5)
+    val testError = Utils.calcFusedTestErr(daisyTest, lcsTest, daisyX, lcsX, imagenetTestLabels, 0.5, 0.5, 5)
     println("Uncombined solve test error is " + testError)
+
+    //lcs Test Error
+    val lcsTestError = Utils.calcTestErr(lcsTest, lcsX, imagenetTestLabels, 5)
+    println("lcsTestError is " + lcsTestError)
+
+    val daisyTestError = Utils.calcTestErr(daisyTest, daisyX, imagenetTestLabels, 5)
+    println("daisyTestError is " + daisyTestError)
 
   }
 }

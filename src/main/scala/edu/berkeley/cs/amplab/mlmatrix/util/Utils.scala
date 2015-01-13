@@ -169,7 +169,7 @@ object Utils {
 
   def calcTestErr(test: RowPartitionedMatrix,
     x: DenseMatrix[Double],
-    actualLabels: RDD[Array[Int]]): Double = {
+    actualLabels: RDD[Array[Int]], k: Int): Double = {
 
     // Compute number of test images
     val numTestImages = test.numRows().toInt
@@ -186,9 +186,114 @@ object Utils {
       p.data.grouped(p.rows).toSeq.transpose.map(y => y.toArray)
     }
 
-    val predictedLabels = topKClassifier(1, predictionArray)
+    val predictedLabels = topKClassifier(k, predictionArray)
     val errPercent = getErrPercent(predictedLabels, actualLabels, numTestImages)
     errPercent
+  }
+
+  def calcFusedTestErr(daisyTest: RowPartitionedMatrix, lcsTest: RowPartitionedMatrix,
+    daisyX: DenseMatrix[Double], lcsX: DenseMatrix[Double],
+    actualLabels: RDD[Array[Int]],
+    daisyWt: Double, lcsWt: Double, k: Int): Double = {
+
+      // Compute number of test images
+      val numTestImages = daisyTest.numRows().toInt
+
+      // Broadcast x
+      val daisyXBroadcast = daisyTest.rdd.context.broadcast(daisyX)
+      val lcsXBroadcast = lcsTest.rdd.context.broadcast(lcsX)
+
+      // Calculate predictions
+      val daisyPrediction = daisyTest.rdd.map { mat =>
+        mat.mat * daisyXBroadcast.value
+      }
+      val lcsPrediction = lcsTest.rdd.map { mat =>
+        mat.mat * lcsXBroadcast.value
+      }
+
+      // Fuse b matrices
+      val fusedPrediction = daisyPrediction.zip(lcsPrediction).flatMap { p =>
+        val fused = (p._1*daisyWt + p._2*lcsWt)
+        // Convert from DenseMatrix to Array[Array[Double]]
+        fused.data.grouped(fused.rows).toSeq.transpose.map(x => x.toArray)
+      }
+
+      val predictedLabels = Utils.topKClassifier(k, fusedPrediction)
+      val errPercent = Utils.getErrPercent(predictedLabels, actualLabels, numTestImages)
+      errPercent
+  }
+
+  def calcFusedTestErrors(daisyTests: Seq[RowPartitionedMatrix], lcsTests: Seq[RowPartitionedMatrix],
+    daisyXs: Seq[DenseMatrix[Double]], lcsXs: Seq[DenseMatrix[Double]],
+    actualLabels: RDD[Array[Int]],
+    daisyWt: Double, lcsWt: Double, k:Int ): DenseVector[Double] = {
+
+      // Compute number of test images
+      val l = daisyTests.length
+      var i = 0
+      val numTestImages = daisyTests(0).numRows().toInt
+
+      var runningSum : Option[RDD[Array[Double]]] = None
+      val testErrors = DenseVector.zeros[Double](l)
+
+      while (i < l) {
+        val A = daisyTests(i)
+        val x = A.rdd.context.broadcast(daisyXs(i))
+        val B = lcsTests(i)
+        val y = B.rdd.context.broadcast(lcsXs(i))
+        val Ax = A.rdd.map( mat => mat.mat*x.value)
+        val By = B.rdd.map( mat => mat.mat*y.value)
+        val fusedPrediction = Ax.zip(By).flatMap { p =>
+          val fused = (p._1*daisyWt + p._2*lcsWt)
+          fused.data.grouped(fused.rows).toSeq.transpose.map(x => x.toArray)
+        }
+        if (runningSum.isEmpty) {
+          runningSum = Some(fusedPrediction)
+        } else {
+          runningSum = Some(runningSum.get.zip(fusedPrediction).map(p => p._1.zip(p._2).map( y =>
+            y._1 + y._2)))
+          }
+          val predictedLabels = topKClassifier(k, runningSum.get)
+          val errPercent = getErrPercent(predictedLabels, actualLabels, numTestImages)
+          testErrors(i) = errPercent
+          i = i + 1
+        }
+        testErrors
+  }
+
+  def calcTestErrors(tests: Seq[RowPartitionedMatrix],
+    xs: Seq[DenseMatrix[Double]],
+    actualLabels: RDD[Array[Int]], k:Int): DenseVector[Double] = {
+
+      // Compute number of test images
+      val l = tests.length
+      var i = 0
+      val numTestImages = tests(0).numRows().toInt
+
+      var runningSum : Option[RDD[Array[Double]]] = None
+      val testErrors = DenseVector.zeros[Double](l)
+
+      while (i < l) {
+        val A = tests(i)
+        val x = A.rdd.context.broadcast(xs(i))
+        val Ax = A.rdd.map( mat => mat.mat*x.value)
+
+        val prediction = Ax.flatMap { p =>
+          p.data.grouped(p.rows).toSeq.transpose.map(x => x.toArray)
+        }
+
+        if (runningSum.isEmpty) {
+          runningSum = Some(prediction)
+        } else {
+          runningSum = Some(runningSum.get.zip(prediction).map(p => p._1.zip(p._2).map( y =>
+            y._1 + y._2)))
+          }
+          val predictedLabels = topKClassifier(k, runningSum.get)
+          val errPercent = getErrPercent(predictedLabels, actualLabels, numTestImages)
+          testErrors(i) = errPercent
+          i = i + 1
+        }
+        testErrors
   }
 
   def computeResidualNorm(A: RowPartitionedMatrix,

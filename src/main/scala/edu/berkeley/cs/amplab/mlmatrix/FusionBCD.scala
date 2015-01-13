@@ -96,7 +96,7 @@ object FusionBCD extends Logging with Serializable {
     residualNorms
   }
 
-  def computeResidualNormWithL2(aTrains: Seq[RowPartitionedMatrix],
+  def computeResidualNormsWithL2(aTrains: Seq[RowPartitionedMatrix],
       b: RowPartitionedMatrix,
       xComputeds: Seq[DenseMatrix[Double]], lambda: Double) = {
     val unregularizedNorms = computeResidualNorms(aTrains ,b,xComputeds)
@@ -107,72 +107,8 @@ object FusionBCD extends Logging with Serializable {
     }
   }
 
-  def loadMatrixFromFile(sc: SparkContext, filename: String): RDD[Array[Double]] = {
-    sc.textFile(filename).map { line =>
-      line.split(",").map(y => y.toDouble)
-    }
-  }
-
-  def getErrPercent(predicted: RDD[Array[Int]], actual: RDD[Array[Int]], numTestImages: Int): Double = {
-    // FIXME: Each image only has one actual label, so actual should be an RDD[Int]
-    val totalErr = predicted.zip(actual).map({ case (topKLabels, actualLabel) =>
-      if (topKLabels.contains(actualLabel(0))) {
-        0.0
-      } else {
-        1.0
-      }
-    }).reduce(_ + _)
-
-    val errPercent = totalErr / numTestImages * 100.0
-    errPercent
-  }
-
-  def topKClassifier(k: Int, in: RDD[Array[Double]]) : RDD[Array[Int]] = {
-    // Returns top k indices with maximum value
-    in.map { ary =>
-      ary.toSeq.zipWithIndex.sortBy(_._1).takeRight(k).map(_._2).toArray
-    }
-    // in.map { ary => argtopk(ary, k).toArray }
-  }
 
 
-  def calcTestErr(daisyTests: Seq[RowPartitionedMatrix], lcsTests: Seq[RowPartitionedMatrix],
-    daisyXs: Seq[DenseMatrix[Double]], lcsXs: Seq[DenseMatrix[Double]],
-    actualLabels: RDD[Array[Int]],
-    daisyWt: Double, lcsWt: Double): DenseVector[Double] = {
-
-    // Compute number of test images
-    val l = daisyTests.length
-    var i = 0
-    val numTestImages = daisyTests(0).numRows().toInt
-
-    var runningSum : Option[RDD[Array[Double]]] = None
-    val testErrors = DenseVector.zeros[Double](l)
-
-    while (i < l) {
-      val A = daisyTests(i)
-      val x = A.rdd.context.broadcast(daisyXs(i))
-      val B = lcsTests(i)
-      val y = B.rdd.context.broadcast(lcsXs(i))
-      val Ax = A.rdd.map( mat => mat.mat*x.value)
-      val By = B.rdd.map( mat => mat.mat*y.value)
-      val fusedPrediction = Ax.zip(By).flatMap { p =>
-         val fused = (p._1*daisyWt + p._2*lcsWt)
-         fused.data.grouped(fused.rows).toSeq.transpose.map(x => x.toArray)
-      }
-      if (runningSum.isEmpty) {
-        runningSum = Some(fusedPrediction)
-      } else {
-        runningSum = Some(runningSum.get.zip(fusedPrediction).map(p => p._1.zip(p._2).map( y =>
-          y._1 + y._2)))
-      }
-      val predictedLabels = topKClassifier(5, runningSum.get)
-      val errPercent = getErrPercent(predictedLabels, actualLabels, numTestImages)
-      testErrors(i) = errPercent
-      i = i + 1
-    }
-    testErrors
-  }
 
   def main(args: Array[String]) {
     if (args.length < 5) {
@@ -224,20 +160,20 @@ object FusionBCD extends Logging with Serializable {
 
     // load matrix RDDs
     val daisyTrainRDDs = daisyTrainFilenames.map {
-      daisyTrainFilename => loadMatrixFromFile(sc, daisyTrainFilename)
+      daisyTrainFilename => Utils.loadMatrixFromFile(sc, daisyTrainFilename, parts)
     }
     val daisyTestRDDs = daisyTestFilenames.map {
-      daisyTestFilename => loadMatrixFromFile(sc, daisyTestFilename)
+      daisyTestFilename => Utils.loadMatrixFromFile(sc, daisyTestFilename, parts)
     }
-    val daisyBRDD = loadMatrixFromFile(sc, daisyBFilename)
+    val daisyBRDD = Utils.loadMatrixFromFile(sc, daisyBFilename, parts)
 
     val lcsTrainRDDs = lcsTrainFilenames.map {
-      lcsTrainFilename => loadMatrixFromFile(sc, lcsTrainFilename)
+      lcsTrainFilename => Utils.loadMatrixFromFile(sc, lcsTrainFilename, parts)
     }
     val lcsTestRDDs = lcsTestFilenames.map {
-      lcsTestFilename => loadMatrixFromFile(sc, lcsTestFilename)
+      lcsTestFilename => Utils.loadMatrixFromFile(sc, lcsTestFilename, parts)
     }
-    val lcsBRDD = loadMatrixFromFile(sc, lcsBFilename)
+    val lcsBRDD = Utils.loadMatrixFromFile(sc, lcsBFilename, parts)
 
 
     val hp = new HashPartitioner(parts)
@@ -331,12 +267,12 @@ object FusionBCD extends Logging with Serializable {
 
     println("Finished solving for lcsXs")
 
-    val testErrors = calcTestErr(daisyTests, lcsTests, daisyXs, lcsXs,
-      imagenetTestLabels, 0.5, 0.5)
+    val testErrors = Utils.calcFusedTestErrors(daisyTests, lcsTests, daisyXs, lcsXs,
+      imagenetTestLabels, 0.5, 0.5, 5)
     println("Test errors : " + testErrors)
 
-    val daisyResiduals = computeResidualNormWithL2(daisyTrains, daisyB, daisyXs, lambda)
-    val lcsResiduals = computeResidualNormWithL2(lcsTrains, lcsB, lcsXs, lambda)
+    val daisyResiduals = computeResidualNormsWithL2(daisyTrains, daisyB, daisyXs, lambda)
+    val lcsResiduals = computeResidualNormsWithL2(lcsTrains, lcsB, lcsXs, lambda)
 
     println("Daisy Residuals " + daisyResiduals.mkString(" "))
     println("LCS Residuals " + lcsResiduals.mkString(" "))

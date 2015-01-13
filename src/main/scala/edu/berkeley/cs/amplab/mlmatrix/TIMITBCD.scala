@@ -96,7 +96,7 @@ object TimitBCD extends Logging with Serializable {
     residualNorms
   }
 
-  def computeResidualNormWithL2(aTrains: Seq[RowPartitionedMatrix],
+  def computeResidualNormsWithL2(aTrains: Seq[RowPartitionedMatrix],
       b: RowPartitionedMatrix,
       xComputeds: Seq[DenseMatrix[Double]], lambda: Double) = {
     val unregularizedNorms = computeResidualNorms(aTrains ,b,xComputeds)
@@ -107,69 +107,8 @@ object TimitBCD extends Logging with Serializable {
     }
   }
 
-  def loadMatrixFromFile(sc: SparkContext, filename: String): RDD[Array[Double]] = {
-    sc.textFile(filename).map { line =>
-      line.split(",").map(y => y.toDouble)
-    }
-  }
-
-  def getErrPercent(predicted: RDD[Array[Int]], actual: RDD[Array[Int]], numTestImages: Int): Double = {
-    // FIXME: Each image only has one actual label, so actual should be an RDD[Int]
-    val totalErr = predicted.zip(actual).map({ case (topKLabels, actualLabel) =>
-      if (topKLabels.contains(actualLabel(0))) {
-        0.0
-      } else {
-        1.0
-      }
-    }).reduce(_ + _)
-
-    val errPercent = totalErr / numTestImages * 100.0
-    errPercent
-  }
-
-  def topKClassifier(k: Int, in: RDD[Array[Double]]) : RDD[Array[Int]] = {
-    // Returns top k indices with maximum value
-    in.map { ary =>
-      ary.toSeq.zipWithIndex.sortBy(_._1).takeRight(k).map(_._2).toArray
-    }
-    // in.map { ary => argtopk(ary, k).toArray }
-  }
 
 
-  def calcTestErr(tests: Seq[RowPartitionedMatrix],
-    xs: Seq[DenseMatrix[Double]],
-    actualLabels: RDD[Array[Int]]): DenseVector[Double] = {
-
-    // Compute number of test images
-    val l = tests.length
-    var i = 0
-    val numTestImages = tests(0).numRows().toInt
-
-    var runningSum : Option[RDD[Array[Double]]] = None
-    val testErrors = DenseVector.zeros[Double](l)
-
-    while (i < l) {
-      val A = tests(i)
-      val x = A.rdd.context.broadcast(xs(i))
-      val Ax = A.rdd.map( mat => mat.mat*x.value)
-
-      val prediction = Ax.flatMap { p =>
-        p.data.grouped(p.rows).toSeq.transpose.map(x => x.toArray)
-      }
-
-      if (runningSum.isEmpty) {
-        runningSum = Some(prediction)
-      } else {
-        runningSum = Some(runningSum.get.zip(prediction).map(p => p._1.zip(p._2).map( y =>
-          y._1 + y._2)))
-      }
-      val predictedLabels = topKClassifier(1, runningSum.get)
-      val errPercent = getErrPercent(predictedLabels, actualLabels, numTestImages)
-      testErrors(i) = errPercent
-      i = i + 1
-    }
-    testErrors
-  }
 
   def main(args: Array[String]) {
     if (args.length < 5) {
@@ -216,17 +155,17 @@ object TimitBCD extends Logging with Serializable {
 
     // load matrix RDDs
     val trainRDDs = trainFilenames.map {
-      trainFilename => loadMatrixFromFile(sc, trainFilename)
+      trainFilename => Utils.loadMatrixFromFile(sc, trainFilename, parts)
     }
     val testRDDs = testFilenames.map {
-      testFilename => loadMatrixFromFile(sc, testFilename)
+      testFilename => Utils.loadMatrixFromFile(sc, testFilename, parts)
     }
-    val bRDD = loadMatrixFromFile(sc, bFilename)
+    val bRDD = Utils.loadMatrixFromFile(sc, bFilename, parts)
 
 
 
     val hp = new HashPartitioner(parts)
-    val trainRDDsPartitioned = trainRDDs.map { trainRDD => 
+    val trainRDDsPartitioned = trainRDDs.map { trainRDD =>
       Utils.repartitionAndSortWithinPartitions(trainRDD.zipWithUniqueId.map(x => x.swap), hp).cache()
     }
     trainRDDsPartitioned.foreach(rdd => rdd.count)
@@ -250,7 +189,7 @@ object TimitBCD extends Logging with Serializable {
     val hpTest = new HashPartitioner(16)
 
     // NOTE: We need to do this as test data has different number of entries per partition
-    val testRDDsPartitioned = testRDDs.map { testRDD => 
+    val testRDDsPartitioned = testRDDs.map { testRDD =>
       Utils.repartitionAndSortWithinPartitions(testRDD.zipWithUniqueId.map(x => x.swap), hpTest).cache()
     }
     testRDDsPartitioned.foreach(rdd => rdd.count)
@@ -278,10 +217,10 @@ object TimitBCD extends Logging with Serializable {
 
     println("Finished solving for xs")
 
-    val testErrors = calcTestErr(tests, xs, actualLabels)
+    val testErrors = Utils.calcTestErrors(tests, xs, actualLabels, 1)
     println("Test errors : " + testErrors)
 
-    val residuals = computeResidualNormWithL2(trains, b, xs, lambda)
+    val residuals = computeResidualNormsWithL2(trains, b, xs, lambda)
 
     println("Residuals " + residuals.mkString(" "))
     //val conditionNumbers = trains.map(train => train.condEst())

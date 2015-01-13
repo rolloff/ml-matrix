@@ -9,6 +9,8 @@
 /root/ephemeral-hdfs/bin/hadoop distcp s3n://imagenet-linear-solver-data/lcs-null-labels /lcs-null-labels
 
 /root/ephemeral-hdfs/bin/hadoop distcp s3n://imagenet-linear-solver-data/imagenet-test-actual /imagenet-test-actual
+/root/ephemeral-hdfs/bin/hadoop distcp s3n://imagenet-linear-solver-data/daisy-0-column-indices.txt /daisy-0-column-indices.txt
+
 
 #for i in `seq 2 5`
 #do

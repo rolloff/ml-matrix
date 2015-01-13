@@ -154,7 +154,7 @@ object TIMIT extends Logging with Serializable {
     println("Timit: " + timitTrain.condEst(Some(timitR)) + " " + timitResidual + " " + timitTime)
     println("SVDs of timitTrain " + timitTrain.svds(Some(timitR)).toArray.mkString(" "))
 
-    val testError = Utils.calcTestErr(timitTest, timitX, timitActual)
+    val testError = Utils.calcTestErr(timitTest, timitX, timitActual, 1)
     println(testError)
   }
 }
