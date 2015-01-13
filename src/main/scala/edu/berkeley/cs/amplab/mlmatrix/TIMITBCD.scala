@@ -64,52 +64,6 @@ object TimitBCD extends Logging with Serializable {
     }
   }
 
-  def computeResidualNorms(aTrains: Seq[RowPartitionedMatrix],
-      b: RowPartitionedMatrix,
-      xComputeds: Seq[DenseMatrix[Double]]) = {
-
-    val l = aTrains.length
-    var i = 0
-
-    val residualNorms = new Array[Double](l)
-
-    var runningSum : Option[RowPartitionedMatrix] = None
-    while (i < l) {
-      val A = aTrains(i)
-      val xBroadcast = A.rdd.context.broadcast(xComputeds(i))
-      val Ax = A.mapPartitions { part =>
-        part*xBroadcast.value
-      }
-
-      if (runningSum.isEmpty) {
-        runningSum = Some(Ax)
-      } else {
-        runningSum = Some((runningSum.get + Ax).asInstanceOf[RowPartitionedMatrix])
-      }
-
-      runningSum.get.cache()
-
-      val residualNorm = (b - runningSum.get).normFrobenius()
-      residualNorms(i) = residualNorm
-      i = i + 1
-    }
-    residualNorms
-  }
-
-  def computeResidualNormsWithL2(aTrains: Seq[RowPartitionedMatrix],
-      b: RowPartitionedMatrix,
-      xComputeds: Seq[DenseMatrix[Double]], lambda: Double) = {
-    val unregularizedNorms = computeResidualNorms(aTrains ,b,xComputeds)
-    val normXs = xComputeds.map(xComputed => norm(xComputed.toDenseVector))
-
-    unregularizedNorms.zip(normXs).map { li =>
-      scala.math.sqrt(li._1*li._1 + lambda*li._2*li._2)
-    }
-  }
-
-
-
-
   def main(args: Array[String]) {
     if (args.length < 5) {
       println("Got args " + args.mkString(" "))
@@ -220,7 +174,7 @@ object TimitBCD extends Logging with Serializable {
     val testErrors = Utils.calcTestErrors(tests, xs, actualLabels, 1)
     println("Test errors : " + testErrors)
 
-    val residuals = computeResidualNormsWithL2(trains, b, xs, lambda)
+    val residuals = Utils.computeResidualNormsWithL2(trains, b, xs, lambda)
 
     println("Residuals " + residuals.mkString(" "))
     //val conditionNumbers = trains.map(train => train.condEst())

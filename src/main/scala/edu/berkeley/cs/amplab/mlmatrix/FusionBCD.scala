@@ -64,48 +64,7 @@ object FusionBCD extends Logging with Serializable {
         new TSQR()
     }
   }
-  def computeResidualNorms(aTrains: Seq[RowPartitionedMatrix],
-      b: RowPartitionedMatrix,
-      xComputeds: Seq[DenseMatrix[Double]]) = {
 
-    val l = aTrains.length
-    var i = 0
-
-    val residualNorms = new Array[Double](l)
-
-    var runningSum : Option[RowPartitionedMatrix] = None
-    while (i < l) {
-      val A = aTrains(i)
-      val xBroadcast = A.rdd.context.broadcast(xComputeds(i))
-      val Ax = A.mapPartitions { part =>
-        part*xBroadcast.value
-      }
-
-      if (runningSum.isEmpty) {
-        runningSum = Some(Ax)
-      } else {
-        runningSum = Some((runningSum.get + Ax).asInstanceOf[RowPartitionedMatrix])
-      }
-
-      runningSum.get.cache()
-
-      val residualNorm = (b - runningSum.get).normFrobenius()
-      residualNorms(i) = residualNorm
-      i = i + 1
-    }
-    residualNorms
-  }
-
-  def computeResidualNormsWithL2(aTrains: Seq[RowPartitionedMatrix],
-      b: RowPartitionedMatrix,
-      xComputeds: Seq[DenseMatrix[Double]], lambda: Double) = {
-    val unregularizedNorms = computeResidualNorms(aTrains ,b,xComputeds)
-    val normXs = xComputeds.map(xComputed => norm(xComputed.toDenseVector))
-
-    unregularizedNorms.zip(normXs).map { li =>
-      scala.math.sqrt(li._1*li._1 + lambda*li._2*li._2)
-    }
-  }
 
 
 
@@ -271,8 +230,8 @@ object FusionBCD extends Logging with Serializable {
       imagenetTestLabels, 0.5, 0.5, 5)
     println("Test errors : " + testErrors)
 
-    val daisyResiduals = computeResidualNormsWithL2(daisyTrains, daisyB, daisyXs, lambda)
-    val lcsResiduals = computeResidualNormsWithL2(lcsTrains, lcsB, lcsXs, lambda)
+    val daisyResiduals = Utils.computeResidualNormsWithL2(daisyTrains, daisyB, daisyXs, lambda)
+    val lcsResiduals = Utils.computeResidualNormsWithL2(lcsTrains, lcsB, lcsXs, lambda)
 
     println("Daisy Residuals " + daisyResiduals.mkString(" "))
     println("LCS Residuals " + lcsResiduals.mkString(" "))
