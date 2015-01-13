@@ -160,10 +160,14 @@ object Fusion extends Logging with Serializable {
 
     testZipped.unpersist()
 
-    // Remove unecessary columns from Daisy
-    //val colIndices = fromFile(directory + "daisy-0-column-indices.txt").getLines.map(x=>x.toInt).toList
-    //daisyTrain = daisyTrain.delete(colIndices, Axis._1)
-    //daisyTest = daisyTest.delete(colIndices, Axis._1)
+    println("daisyTrain rows " + daisyTrain.numRows() + ", daisyTrain cols " + daisyTrain.numCols())
+    println("lcsTrain rows " + lcsTrain.numRows() + ", lcsTrain cols " + lcsTrain.numCols())
+    println("Removing unecessary columns from Daisy")
+
+    //Remove unecessary columns from Daisy
+    val colIndices = fromFile(directory + "daisy-0-column-indices.txt").getLines.map(x=>x.toInt).toList
+    daisyTrain = daisyTrain.delete(colIndices, Axis._1)
+    daisyTest = daisyTest.delete(colIndices, Axis._1)
 
     // Compute daisy and LCS row norms
     /*
@@ -186,9 +190,9 @@ object Fusion extends Logging with Serializable {
     println("LCS Row norms highest " + lcsRowNorms.takeRight(10).mkString(","))
     */
 
-    println("daisyTrain rows " + daisyTrain.numRows() + ", daisyTrain cols " + daisyTrain.numCols())
-    println("lcsTrain rows " + lcsTrain.numRows() + ", lcsTrain cols " + lcsTrain.numCols())
 
+
+    /*
     // Combine problems
     val train = daisyTrain.horzcat(lcsTrain)
     val test = daisyTest.horzcat(lcsTest)
@@ -211,12 +215,13 @@ object Fusion extends Logging with Serializable {
     println("Combined solve residual is " + residual)
     val combinedTestError = Utils.calcTestErr(test, x, imagenetTestLabels, 5)
     println("Combined solve test error is " + combinedTestError)
+    */
 
 
     // Solve for daisy x
-    begin = System.nanoTime()
+    var begin = System.nanoTime()
     val daisyX = solveForX(daisyTrain, daisyB, solver, lambda, numIterations, stepSize, miniBatchFraction)
-    end = System.nanoTime()
+    var end = System.nanoTime()
     // Timing numbers are in ms
     val daisyTime = (end - begin) / 1e6
     println("Finished solving for daisy X in" + daisyTime + " ms")
