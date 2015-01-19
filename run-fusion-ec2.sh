@@ -4,8 +4,8 @@ DRIVER_MEM="40g"
 FAT_JAR="/root/ml-matrix/target/scala-2.10/mlmatrix-assembly-0.1.jar"
 DATA_DIR="/"
 PARTS=1024
-SOLVER=tsqr
-LAMBDA=0.1
+SOLVER=normal
+LAMBDA=0
 
 SGD_STEP_SIZE="8e-4"
 SGD_NUM_ITERS=50
