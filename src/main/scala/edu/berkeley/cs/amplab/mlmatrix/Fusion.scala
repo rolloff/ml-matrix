@@ -161,7 +161,18 @@ object Fusion extends Logging with Serializable {
     testZipped.unpersist()
 
     println("daisyTrain rows " + daisyTrain.numRows() + ", daisyTrain cols " + daisyTrain.numCols())
+    println("daisyTest rows " + daisyTest.numRows() + ", daisyTest cols " + daisyTest.numCols())
     println("lcsTrain rows " + lcsTrain.numRows() + ", lcsTrain cols " + lcsTrain.numCols())
+    println("lcsTest rows " + lcsTest.numRows() + ", lcsTest cols " + lcsTest.numCols())
+
+    //check to make sure all cols have the same value by running unique
+    val cols: Array[Int] = daisyTest.rdd.map { p => p.mat.cols.toInt}.collect()
+    val numDistinctElements = cols.distinct.length
+    require(numDistinctElements==1, s"numDistinctElements in daisyTest must be 1, but got $numDistinctElements")
+
+
+
+
     println("Removing unecessary columns from Daisy")
 
     //Remove unecessary columns from Daisy
