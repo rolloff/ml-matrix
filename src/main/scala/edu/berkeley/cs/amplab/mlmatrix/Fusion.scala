@@ -167,6 +167,7 @@ object Fusion extends Logging with Serializable {
 
     //check to make sure all cols have the same value by running unique
     val cols: Array[Int] = daisyTest.rdd.map { p => p.mat.cols.toInt}.collect()
+    println(cols.mkString("\n"))
     val numDistinctElements = cols.distinct.length
     require(numDistinctElements==1, s"numDistinctElements in daisyTest must be 1, but got $numDistinctElements")
 

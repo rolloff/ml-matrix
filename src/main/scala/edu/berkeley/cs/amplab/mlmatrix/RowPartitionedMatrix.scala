@@ -232,7 +232,9 @@ class RowPartitionedMatrix(
 
   // Delete specific columns from the matrix
   def delete(cols: Seq[Int], axis: Axis._1.type) = {
-    RowPartitionedMatrix.fromMatrix(rdd.map { lm =>
+    RowPartitionedMatrix.fromMatrix(rdd.zipWithIndex.map { case ( lm, idx) =>
+      val matCols = lm.mat.cols
+      require(matCols == 4001, s"got cols equal to $matCols on index $idx")  
       lm.mat.delete(cols, axis)
     })
   }
