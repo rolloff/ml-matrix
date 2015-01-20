@@ -251,15 +251,16 @@ object Fusion extends Logging with Serializable {
     val daisyResidual = Utils.computeResidualNormWithL2(daisyTrain, daisyB, daisyX, lambda)
     val lcsResidual = Utils.computeResidualNormWithL2(lcsTrain, lcsB, lcsX, lambda)
     println("Finished computing the residuals " + daisyResidual + " " + lcsResidual)
-    val testError = Utils.calcFusedTestErr(daisyTest, lcsTest, daisyX, lcsX, imagenetTestLabels, 0.5, 0.5, 5)
-    println("Uncombined solve test error is " + testError)
+
+    //val testError = Utils.calcFusedTestErr(daisyTest, lcsTest, daisyX, lcsX, imagenetTestLabels, 0.5, 0.5, 5)
+    //println("Uncombined solve test error is " + testError)
 
     //lcs Test Error
     //val lcsTestError = Utils.calcTestErr(lcsTest, lcsX, imagenetTestLabels, 5)
-    println("lcsTestError is " + lcsTestError)
+    //println("lcsTestError is " + lcsTestError)
 
     //val daisyTestError = Utils.calcTestErr(daisyTest, daisyX, imagenetTestLabels, 5)
-    println("daisyTestError is " + daisyTestError)
+    //println("daisyTestError is " + daisyTestError)
 
   }
 }
