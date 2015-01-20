@@ -182,7 +182,7 @@ object Fusion extends Logging with Serializable {
     daisyTrain = daisyTrain.delete(colIndices, Axis._1)
 
     println("Done deleting columns from daisyTrain")
-    daisyTest = daisyTest.delete(colIndices, Axis._1)
+    //daisyTest = daisyTest.delete(colIndices, Axis._1)
 
     // Compute daisy and LCS row norms
     /*
@@ -255,10 +255,10 @@ object Fusion extends Logging with Serializable {
     println("Uncombined solve test error is " + testError)
 
     //lcs Test Error
-    val lcsTestError = Utils.calcTestErr(lcsTest, lcsX, imagenetTestLabels, 5)
+    //val lcsTestError = Utils.calcTestErr(lcsTest, lcsX, imagenetTestLabels, 5)
     println("lcsTestError is " + lcsTestError)
 
-    val daisyTestError = Utils.calcTestErr(daisyTest, daisyX, imagenetTestLabels, 5)
+    //val daisyTestError = Utils.calcTestErr(daisyTest, daisyX, imagenetTestLabels, 5)
     println("daisyTestError is " + daisyTestError)
 
   }
