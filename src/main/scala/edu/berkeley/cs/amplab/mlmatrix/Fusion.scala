@@ -168,6 +168,8 @@ object Fusion extends Logging with Serializable {
     val colLines = sc.textFile(directory + "daisy-zero/daisy-zero-column-indices.txt")
     val colIndices = colLines.map(x=>x.toInt).collect().toList
     daisyTrain = daisyTrain.delete(colIndices, Axis._1)
+
+    println("Done deleting columns from daisyTrain")
     daisyTest = daisyTest.delete(colIndices, Axis._1)
 
     // Compute daisy and LCS row norms
