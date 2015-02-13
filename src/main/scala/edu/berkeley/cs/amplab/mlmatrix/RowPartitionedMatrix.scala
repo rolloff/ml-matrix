@@ -234,7 +234,7 @@ class RowPartitionedMatrix(
   def delete(cols: Seq[Int], axis: Axis._1.type) = {
     RowPartitionedMatrix.fromMatrix(rdd.zipWithIndex.map { case ( lm, idx) =>
       val matCols = lm.mat.cols
-      require(matCols == 4001, s"got cols equal to $matCols on index $idx")  
+      //require(matCols == 4001, s"got cols equal to $matCols on index $idx")
       lm.mat.delete(cols, axis)
     })
   }
@@ -245,12 +245,12 @@ class RowPartitionedMatrix(
       DenseMatrix.horzcat(p._1.mat, p._2.mat)
     }
     //check to make sure all cols have the same value by running unique
-    val cols: Array[Int] = newRDD.map { p => p.cols.toInt}.collect()
-    val numDistinctElements = cols.distinct.length
-    require(numDistinctElements==1, s"numDistinctElements must be 1, but got $numDistinctElements")
-    println(cols.slice(0, 10).mkString(" "))
+    //val cols: Array[Int] = newRDD.map { p => p.cols.toInt}.collect()
+    //val numDistinctElements = cols.distinct.length
+    //require(numDistinctElements==1, s"numDistinctElements must be 1, but got $numDistinctElements")
+    //println(cols.slice(0, 10).mkString(" "))
+
     RowPartitionedMatrix.fromMatrix(newRDD, this.numRows(), this.numCols() + other.numCols())
-    //RowPartitionedMatrix.fromMatrix(newRDD)
   }
 }
 

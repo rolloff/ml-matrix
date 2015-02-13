@@ -16,10 +16,8 @@ object QRUtils {
    * @returns R, upper triangular
    */
   def qrYTR(A: DenseMatrix[Double], cloneMatrix: Boolean = true) = {
-    println("Inside qrYTR")
     val m = A.rows
     val n = A.cols
-    println("m is " + m + ", n is " + n)
 
     // Get optimal workspace size
     // we do this by sending -1 as lwork to the lapack function
