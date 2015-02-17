@@ -1,9 +1,12 @@
 package edu.berkeley.cs.amplab.mlmatrix.util
 
 import scala.reflect.ClassTag
+import scala.util.Random
 
 import org.apache.spark.SparkContext._
+import org.apache.spark.SparkEnv
 import org.apache.spark.HashPartitioner
+import org.apache.spark.Partitioner
 import org.apache.spark.rdd.RDD
 
 import breeze.linalg._
@@ -89,9 +92,26 @@ object Utils {
     val aggregatePartition = (it: Iterator[T]) => it.aggregate(zeroValue)(seqOp, combOp)
     var partiallyAggregated = rdd.mapPartitions(it => Iterator(aggregatePartition(it)))
     var numPartitions = partiallyAggregated.partitions.size
+
+    if (rdd.context.getConf.getBoolean("spark.mlmatrix.treeExecutorAgg", false)) {
+      // Do one level of aggregation based on executorId before starting the tree
+      // NOTE: exclude the driver from list of executors
+      val numExecutors = math.max(rdd.context.getExecutorStorageStatus.length - 1, 1)
+      partiallyAggregated = partiallyAggregated.mapPartitionsWithIndex { case (idx, iter) =>
+        def isAllDigits(x: String) = x forall Character.isDigit
+        val execId = SparkEnv.get.executorId
+        if (isAllDigits(execId)) {
+          iter.map((execId.toInt, _))
+        } else {
+          iter.map((execId.hashCode, _))
+        }
+      }.reduceByKey(new HashPartitioner(numExecutors), combOp).values
+      numPartitions = numExecutors
+    }
+
     val scale = math.max(math.ceil(math.pow(numPartitions, 1.0 / depth)).toInt, 2)
     // If creating an extra level doesn't help reduce the wall-clock time, we stop tree aggregation.
-    while (numPartitions > 1) { // while (numPartitions > scale + numPartitions / scale) {
+    while (numPartitions/scale > 1) { // while (numPartitions > scale + numPartitions / scale) {
       numPartitions /= scale
       val curNumPartitions = numPartitions
       partiallyAggregated = partiallyAggregated.mapPartitionsWithIndex { (i, iter) =>
@@ -104,4 +124,35 @@ object Utils {
   def aboutEq(a: DenseMatrix[Double], b: DenseMatrix[Double], thresh: Double = 1e-8) = {
     math.abs(max(a-b)) < thresh
   }
+
+  // Creates a coalescer that can be used on RDDs which have same number of partitions
+  // and same number of rows per partition.
+  // This is useful as many RDDs can be coalesced in a similar fashion.
+  def createCoalescer[T: ClassTag](firstRDD: RDD[T], numPartitions: Int) = {
+    // assert(rdds.length > 0)
+    // // First get a random RDD of indices
+    // val firstRDD = rdds(0)
+    val distributePartition = (index: Int, items: Iterator[_]) => {
+      var position = (new Random(index)).nextInt(numPartitions)
+      items.map { t =>
+        // Note that the hash code of the key will just be the key itself. The HashPartitioner
+        // will mod it with the number of total partitions.
+        position = position + 1
+        position
+      }
+    } : Iterator[Int]
+
+    val randomIndices = firstRDD.mapPartitionsWithIndex(distributePartition)
+    val partitioner = new HashPartitioner(numPartitions)
+
+    val coalescer = new Coalescer(randomIndices, partitioner)
+    coalescer
+  }
+
+  class Coalescer(randomIndices: RDD[Int], partitioner: Partitioner) {
+    def apply[T: ClassTag](rdd: RDD[T]) = {
+      randomIndices.zip(rdd).partitionBy(partitioner).values
+    }
+  }
+
 }
