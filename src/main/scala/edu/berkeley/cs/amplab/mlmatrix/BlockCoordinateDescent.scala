@@ -1,6 +1,7 @@
 package edu.berkeley.cs.amplab.mlmatrix
 
 import breeze.linalg._
+import org.apache.spark.{SparkConf, SparkContext}
 
 class BlockCoordinateDescent extends Logging with Serializable {
 
@@ -47,7 +48,7 @@ class BlockCoordinateDescent extends Logging with Serializable {
           var i = 0
           while (i < xs.length) {
             val newAx = part._1.mat * xs(i)
-            part._2(i) += newAx
+            part._2(i) :+= newAx
             i = i + 1
           }
           part._2
@@ -74,7 +75,9 @@ class BlockCoordinateDescent extends Logging with Serializable {
     b: RowPartitionedMatrix,
     lambdas: Array[Double],
     numIters: Int,
-    solver: RowPartitionedSolver): Seq[Seq[DenseMatrix[Double]]]  = {
+    solver: RowPartitionedSolver,
+    intermediateCallback: Option[(Seq[DenseMatrix[Double]], Int) => Unit] = None, // Called after each column block 
+    checkpointIntermediate: Boolean = false): Seq[Seq[DenseMatrix[Double]]]  = {
 
     val numColBlocks = aParts.length
     val numColsb = b.numCols()
@@ -139,6 +142,10 @@ class BlockCoordinateDescent extends Logging with Serializable {
           }
         }.cache()
 
+        if (checkpointIntermediate) {
+          newOutput.checkpoint()
+        }
+
         // Materialize this output and remove the older output
         newOutput.count()
         output.unpersist()
@@ -149,8 +156,59 @@ class BlockCoordinateDescent extends Logging with Serializable {
 
         // Set the newX
         xs(p) = newXjs
+
+        // Call the intermediate callback if we have one
+        intermediateCallback.foreach { fn =>
+          fn(xs(p), p)
+        }
       }
     }
     xs
   }
+}
+
+object BlockCoordinateDescent {
+
+  def main(args: Array[String]) {
+    if (args.length < 6) {
+      println("Usage: BlockCoordinateDescent <master> <rowsPerBlock> <numRowBlocks> <colsPerBlock>"
+        + " <numColBlocks> <numPasses>")
+      System.exit(0)
+    }
+
+    val sparkMaster = args(0)
+    val rowsPerBlock = args(1).toInt
+    val numRowBlocks = args(2).toInt
+    val colsPerBlock = args(3).toInt
+    val numColBlocks = args(4).toInt
+    val numPasses = args(5).toInt
+    val numClasses = 147 // TODO: hard coded for now
+
+    val conf = new SparkConf()
+      .setMaster(sparkMaster)
+      .setAppName("BlockCoordinateDescent")
+      .setJars(SparkContext.jarOfClass(this.getClass).toSeq)
+    val sc = new SparkContext(conf)
+
+    val aParts = (0 until numColBlocks).map { p =>
+      RowPartitionedMatrix.createRandom(
+        sc, rowsPerBlock * numRowBlocks, colsPerBlock, numRowBlocks, cache=true)
+    }
+
+    val b =  aParts(0).mapPartitions(
+      part => DenseMatrix.rand(part.rows, numClasses)).cache()
+
+    // Create all RDDs
+    aParts.foreach { aPart => aPart.rdd.count }
+    b.rdd.count
+
+    var begin = System.nanoTime()
+    val xs = new BlockCoordinateDescent().solveLeastSquaresWithL2(aParts, b, Array(0.0), numPasses,
+      new NormalEquations()).map(x => x.head)
+    var end = System.nanoTime()
+
+    sc.stop()
+    println("BlockCoordinateDescent took " + (end-begin)/1e6 + " ms")
+  }
+
 }

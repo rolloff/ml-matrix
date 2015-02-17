@@ -10,7 +10,7 @@ import edu.berkeley.cs.amplab.mlmatrix.util.Utils
 import breeze.linalg._
 import breeze.numerics._
 
-//object SlowTest extends Tag("edu.berkeley.cs.amplab.mlmatrix.SlowTest")
+object SlowTest extends Tag("edu.berkeley.cs.amplab.mlmatrix.SlowTest")
 
 class TSQRSuite extends FunSuite with LocalSparkContext {
 
@@ -112,8 +112,6 @@ class TSQRSuite extends FunSuite with LocalSparkContext {
     for (i <- 0 until lambdas.length) {
       val x = xs(i)
       val reg = DenseMatrix.eye[Double](16) :* math.sqrt(lambdas(i))
-      // TODO: This checks our solution with the same method applied locally
-      // Investigate why using breeze's default solver gives some numerical error.
       val toSolve = DenseMatrix.vertcat(localA, reg)
       val localQR = qr(toSolve)
       val localX = localQR.r \ (localQR.q.t * DenseMatrix.vertcat(localB,
