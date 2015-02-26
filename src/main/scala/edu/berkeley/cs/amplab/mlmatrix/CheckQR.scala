@@ -107,7 +107,7 @@ object CheckQR extends Logging with Serializable {
     //Local Normal Equations
     val ATA = localA.t*localA
     val ATB = localA.t*localB
-    val localXNormal = (ATA + DenseMatrix.eye[Double](ATA.rows):*lambda) \ ATB
+    val localXNormal = (ATA + (DenseMatrix.eye[Double](ATA.rows):*lambda)) \ ATB
 
     //Daisy QR results
     val (daisyR, daisyQTB) = new TSQR().returnQRResult(daisyTrain,daisyB)
