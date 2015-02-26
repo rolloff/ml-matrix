@@ -325,12 +325,26 @@ object Utils {
     residualNorm
   }
 
+  def computeResidualNorm(A: DenseMatrix[Double],
+    b: DenseMatrix[Double],
+    xComputed: DenseMatrix[Double]) = {
+    norm((b - A*xComputed).toDenseVector)
+  }
+
   def computeResidualNormWithL2(A: RowPartitionedMatrix,
     b: RowPartitionedMatrix,
     xComputed: DenseMatrix[Double], lambda: Double) = {
     val unregularizedNorm = computeResidualNorm(A,b,xComputed)
     val normX = norm(xComputed.toDenseVector)
 
+    scala.math.sqrt(unregularizedNorm*unregularizedNorm + lambda*normX*normX)
+  }
+
+  def computeResidualNormWithL2(A: DenseMatrix[Double],
+    b: DenseMatrix[Double],
+    xComputed: DenseMatrix[Double], lambda: Double) = {
+    val unregularizedNorm = computeResidualNorm(A,b,xComputed)
+    val normX = norm(xComputed.toDenseVector)
     scala.math.sqrt(unregularizedNorm*unregularizedNorm + lambda*normX*normX)
   }
 

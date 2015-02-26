@@ -212,6 +212,35 @@ class TSQR extends RowPartitionedSolver with Logging with Serializable {
     results
   }
 
+  /*Exactly model situation in solveLeastSquaresWithManyL2 to generate R to pass to CheckQR*/
+  def returnQRResult(
+    A: RowPartitionedMatrix,
+    b: RowPartitionedMatrix): (DenseMatrix[Double], DenseMatrix[Double]) = {
+  val matrixParts = A.rdd.zip(b.rdd).map(x => (x._1.mat, x._2.mat))
+  val localQR = A.rdd.context.accumulator(0.0, "Time taken for Local QR Solve")
+
+  val qrTree = matrixParts.map { part =>
+    val (aPart, bPart) = part
+    if (aPart.rows < aPart.cols) {
+      (aPart, bPart)
+    } else {
+      val begin = System.nanoTime
+      val out = QRUtils.qrSolve(aPart, bPart)
+      localQR += ((System.nanoTime - begin) / 1000000)
+      out
+    }
+  }
+
+  val depth = math.ceil(math.log(A.rdd.partitions.size)/math.log(2)).toInt
+  val qrResult = Utils.treeReduce(qrTree,
+    reduceQRSolve(
+      localQR,
+      _: (DenseMatrix[Double], DenseMatrix[Double]),
+      _: (DenseMatrix[Double], DenseMatrix[Double])),
+    depth=depth)
+  qrResult
+  }
+
   private def reduceQRSolve(
       acc: Accumulator[Double],
       a: (DenseMatrix[Double], DenseMatrix[Double]),

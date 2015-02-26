@@ -21,35 +21,9 @@ import org.apache.spark.SparkContext._
 
 object CheckQR extends Logging with Serializable {
 
-  def solveForX(
-      A: RowPartitionedMatrix,
-      b: RowPartitionedMatrix,
-      solver: String,
-      lambda: Double,
-      numIterations: Integer,
-      stepSize: Double,
-      miniBatchFraction: Double) = {
-    solver.toLowerCase match {
-      case "normal" =>
-        new NormalEquations().solveLeastSquaresWithL2(A, b, lambda)
-      case "sgd" =>
-        new LeastSquaresGradientDescent(numIterations, stepSize, miniBatchFraction).solveLeastSquaresWithL2(A, b, lambda)
-      case "tsqr" =>
-        new TSQR().solveLeastSquaresWithL2(A, b, lambda)
-      case "local" =>
-        // Solve regularized least squares problem with local qr factorization
-        val (aTilde, bTilde) = QRUtils.qrSolveWithL2(A.collect(), b.collect(), lambda)
-        aTilde \ bTilde
-      case _ =>
-        logError("Invalid Solver " + solver + " should be one of tsqr|normal|sgd")
-        logError("Using TSQR")
-        new TSQR().solveLeastSquares(A, b)
-    }
-  }
-
   def main(args: Array[String]) {
     if (args.length < 5) {
-      println("Usage: CheckQR <master> <data_dir> <parts> <solver: tsqr|normal|sgd|local> <lambda> [<stepsize> <numIters> <miniBatchFraction>]")
+      println("Usage: CheckQR <master> <data_dir> <parts> <lambda> <thresh>")
       System.exit(0)
     }
 
@@ -57,35 +31,17 @@ object CheckQR extends Logging with Serializable {
     // Directory that holds the data
     val directory = args(1)
     val parts = args(2).toInt
-    val solver = args(3)
     // Lambda for regularization
-    val lambda = args(4).toDouble
+    val lambda = args(3).toDouble
+    //Threshold for error checks
+    val thresh = args(4).toDouble
 
     println("Running Fusion with ")
     println("master: " + sparkMaster)
     println("directory: " + directory)
     println("parts: " + parts)
-    println("solver: " + solver)
     println("lambda: " + lambda)
-
-    var stepSize = 0.1
-    var numIterations = 10
-    var miniBatchFraction = 1.0
-    if (solver == "sgd") {
-      if (args.length < 8) {
-        println(args.mkString(","))
-        println("Usage: Fusion <master> <data_dir> <parts> <solver: tsqr|normal|sgd|local> <lambda> [<stepsize> <numIters> <miniBatchFraction>]")
-        System.exit(0)
-      } else {
-        stepSize = args(5).toDouble
-        numIterations = args(6).toInt
-        miniBatchFraction = args(7).toDouble
-
-        println("stepSize: " + stepSize)
-        println("numIterations: " + numIterations)
-        println("miniBatchFraction: " + miniBatchFraction)
-      }
-    }
+    println("thresh: " + thresh)
 
     val conf = new SparkConf()
       .setMaster(sparkMaster)
@@ -95,24 +51,17 @@ object CheckQR extends Logging with Serializable {
 
     // Daisy filenames
     val daisyTrainFilename = directory + "daisy-aPart1-1/"
-    val daisyTestFilename = directory + "daisy-testFeatures-test-1/"
     val daisyBFilename = directory + "daisy-null-labels/"
 
     // LCS filenames
     val lcsTrainFilename = directory + "lcs-aPart1-1/"
-    val lcsTestFilename = directory + "lcs-testFeatures-test-1/"
     val lcsBFilename = directory + "lcs-null-labels/"
-
-    // Actual labels from imagenet
-    val imagenetTestLabelsFilename = directory + "imagenet-test-actual/"
 
     // load matrix RDDs
     val daisyTrainRDD = Utils.loadMatrixFromFile(sc, daisyTrainFilename, parts)
-    val daisyTestRDD = Utils.loadMatrixFromFile(sc, daisyTestFilename, parts)
     val daisyBRDD = Utils.loadMatrixFromFile(sc, daisyBFilename, parts)
 
     val lcsTrainRDD = Utils.loadMatrixFromFile(sc, lcsTrainFilename, parts)
-    var lcsTestRDD = Utils.loadMatrixFromFile(sc, lcsTestFilename, parts)
     val lcsBRDD = Utils.loadMatrixFromFile(sc, lcsBFilename, parts)
 
 
@@ -135,64 +84,63 @@ object CheckQR extends Logging with Serializable {
 
     trainZipped.unpersist()
 
-    // Load text file as array of ints
-    val imagenetTestLabelsRDD = sc.textFile(imagenetTestLabelsFilename).map { line =>
-      line.split(",").map(x => x.toInt)
-    }
-
-    // NOTE: We need to do this as test data has different number of entries per partition
-    val testZipped = daisyTestRDD.zip(lcsTestRDD).zip(imagenetTestLabelsRDD).repartition(16).cache()
-
-    // Lets cache and assert a few things
-    testZipped.count
-
-    var daisyTest = RowPartitionedMatrix.fromArray(testZipped.map(p => p._1._1)).cache()
-    val lcsTest = RowPartitionedMatrix.fromArray(testZipped.map(p => p._1._2)).cache()
-    // NOTE: Test labels is partitioned the same way as test features
-
-    val imagenetTestLabels = testZipped.map(p => p._2).cache()
-
-    daisyTest.rdd.count
-    lcsTest.rdd.count
-    imagenetTestLabels.count
-    println("imageNet coalesced")
-
-    testZipped.unpersist()
-
-    println("daisyTrain rows " + daisyTrain.numRows() + ", daisyTrain cols " + daisyTrain.numCols())
-    println("daisyTest rows " + daisyTest.numRows() + ", daisyTest cols " + daisyTest.numCols())
-    println("lcsTrain rows " + lcsTrain.numRows() + ", lcsTrain cols " + lcsTrain.numCols())
-    println("lcsTest rows " + lcsTest.numRows() + ", lcsTest cols " + lcsTest.numCols())
-
-
-    // Solve for daisy x using TSQR
-    var begin = System.nanoTime()
-    val daisyX = solveForX(daisyTrain, daisyB, solver, lambda, numIterations, stepSize, miniBatchFraction)
-    var end = System.nanoTime()
-    // Timing numbers are in ms
-    val daisyTime = (end - begin) / 1e6
-    println("Finished solving for daisy X in" + daisyTime + " ms")
-
-    // Solve for lcs x using TSQR
-    begin = System.nanoTime()
-    val lcsX = solveForX(lcsTrain, lcsB, solver, lambda, numIterations, stepSize, miniBatchFraction)
-    end = System.nanoTime()
-    val lcsTime = (end -begin) /1e6
-    println("Finished solving for lcsX in" + lcsTime + " ms")
-
-    val daisyResidual = Utils.computeResidualNormWithL2(daisyTrain, daisyB, daisyX, lambda)
-    val lcsResidual = Utils.computeResidualNormWithL2(lcsTrain, lcsB, lcsX, lambda)
-    println("Finished computing the TSQR residuals; Daisy: " + daisyResidual + " LCS: " + lcsResidual)
 
     // Solve for Daisy x using local QR solve
     val localA = daisyTrain.collect()
     val localB = daisyB.collect()
     val reg = DenseMatrix.eye[Double](localA.cols) :* math.sqrt(lambda)
+
+    /*
+    //Perform concatenation before QR
     val toSolve = DenseMatrix.vertcat(localA, reg)
     val localQR = qr(toSolve)
-    val localX = localQR.r \ (localQR.q.t * DenseMatrix.vertcat(localB,
-      DenseMatrix.zeros[Double](localA.cols, localB.cols)))
-    assert(Utils.aboutEq(daisyX, localX))
+    val localQTB = (localQR.q.t * DenseMatrix.vertcat(localB, DenseMatrix.zeros[Double](localA.cols, localB.cols)))
+    val localX = localQR.r \ localQTB
+    */
+    //Perform concatenation after QR
+    val localQR = qr(localA)
+    val localQTB = (localQR.q.t*localB)
+    val localQTBStacked = DenseMatrix.vertcat(localQTB, DenseMatrix.zeros[Double](localA.cols, localB.cols))
+    val localRStacked = DenseMatrix.vertcat(localQR.r, reg)
+    val localXQR = localRStacked \ localQTBStacked
+
+    //Local Normal Equations
+    val ATA = localA.t*localA
+    val ATB = localA.t*localB
+    val localXNormal = (ATA + DenseMatrix.eye[Double](ATA.rows):*lambda) \ ATB
+
+    //Daisy QR results
+    val (daisyR, daisyQTB) = new TSQR().returnQRResult(daisyTrain,daisyB)
+    val daisyRStacked = DenseMatrix.vertcat(daisyR, DenseMatrix.eye[Double](daisyR.cols):*math.sqrt(lambda))
+    val daisyQTBStacked = DenseMatrix.vertcat(daisyQTB, new DenseMatrix[Double](daisyR.cols, daisyQTB.cols))
+    val daisyXQR = daisyRStacked \ daisyQTBStacked
+
+    //Daisy Normal Equation results
+    val daisyXNormal = new NormalEquations().solveLeastSquaresWithL2(daisyTrain, daisyB, lambda)
+
+
+    if(Utils.aboutEq(daisyXNormal, localXNormal)){
+      println("x from normal paasses")
+    }else{
+      println("x from normal fails")
+    }
+
+
+    if(Utils.aboutEq(daisyXQR, localXQR)){
+      println("x from QR passes")
+    }else{
+      println("x from QR fails")
+    }
+
+    val localQRResidual = Utils.computeResidualNormWithL2(localA, localB, localXQR, lambda)
+    val localNormalResidual = Utils.computeResidualNormWithL2(localA, localB, localXNormal, lambda)
+    val distributedQRResidual = Utils.computeResidualNormWithL2(daisyTrain, daisyB, daisyXQR, lambda)
+    val distributedNormalResidual = Utils.computeResidualNormWithL2(daisyTrain, daisyB, daisyXNormal, lambda)
+
+    println("Local QR Residual is " + localQRResidual)
+    println("Local Normal Residual is " + localNormalResidual)
+    println("Distributed QR Residual is " + distributedQRResidual)
+    println("Distributed Normal Residual is " + distributedNormalResidual)
 
   }
 }
