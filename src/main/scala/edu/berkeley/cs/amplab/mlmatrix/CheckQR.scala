@@ -81,8 +81,23 @@ object CheckQR extends Logging with Serializable {
     daisyB.rdd.count
     lcsTrain.rdd.count
     lcsB.rdd.count
-
     trainZipped.unpersist()
+
+    //Daisy QR results
+    val (daisyR, daisyQTB) = new TSQR().returnQRResult(daisyTrain,daisyB)
+    val daisyRStacked = DenseMatrix.vertcat(daisyR, DenseMatrix.eye[Double](daisyR.cols):*math.sqrt(lambda))
+    val daisyQTBStacked = DenseMatrix.vertcat(daisyQTB, new DenseMatrix[Double](daisyR.cols, daisyQTB.cols))
+    val daisyXQR = daisyRStacked \ daisyQTBStacked
+
+    //Daisy Normal Equation results
+    val daisyXNormal = new NormalEquations().solveLeastSquaresWithL2(daisyTrain, daisyB, lambda)
+
+
+    val distributedQRResidual = Utils.computeResidualNormWithL2(daisyTrain, daisyB, daisyXQR, lambda)
+    val distributedNormalResidual = Utils.computeResidualNormWithL2(daisyTrain, daisyB, daisyXNormal, lambda)
+    println("Distributed QR Residual is " + distributedQRResidual)
+    println("Distributed Normal Residual is " + distributedNormalResidual)
+
 
 
     // Solve for Daisy x using local QR solve
@@ -109,15 +124,6 @@ object CheckQR extends Logging with Serializable {
     val ATB = localA.t*localB
     val localXNormal = (ATA + (DenseMatrix.eye[Double](ATA.rows):*lambda)) \ ATB
 
-    //Daisy QR results
-    val (daisyR, daisyQTB) = new TSQR().returnQRResult(daisyTrain,daisyB)
-    val daisyRStacked = DenseMatrix.vertcat(daisyR, DenseMatrix.eye[Double](daisyR.cols):*math.sqrt(lambda))
-    val daisyQTBStacked = DenseMatrix.vertcat(daisyQTB, new DenseMatrix[Double](daisyR.cols, daisyQTB.cols))
-    val daisyXQR = daisyRStacked \ daisyQTBStacked
-
-    //Daisy Normal Equation results
-    val daisyXNormal = new NormalEquations().solveLeastSquaresWithL2(daisyTrain, daisyB, lambda)
-
 
     if(Utils.aboutEq(daisyXNormal, localXNormal)){
       println("x from normal paasses")
@@ -134,13 +140,9 @@ object CheckQR extends Logging with Serializable {
 
     val localQRResidual = Utils.computeResidualNormWithL2(localA, localB, localXQR, lambda)
     val localNormalResidual = Utils.computeResidualNormWithL2(localA, localB, localXNormal, lambda)
-    val distributedQRResidual = Utils.computeResidualNormWithL2(daisyTrain, daisyB, daisyXQR, lambda)
-    val distributedNormalResidual = Utils.computeResidualNormWithL2(daisyTrain, daisyB, daisyXNormal, lambda)
 
     println("Local QR Residual is " + localQRResidual)
     println("Local Normal Residual is " + localNormalResidual)
-    println("Distributed QR Residual is " + distributedQRResidual)
-    println("Distributed Normal Residual is " + distributedNormalResidual)
 
   }
 }
