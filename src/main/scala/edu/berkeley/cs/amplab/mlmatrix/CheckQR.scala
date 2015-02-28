@@ -30,19 +30,19 @@ object CheckQR extends Logging with Serializable {
      b2: DenseMatrix[Double],
      b3: DenseMatrix[Double],
      b4: DenseMatrix[Double], lambda: Double): DenseMatrix[Double] = {
-    val QR1 = qr(a1)
-    val QR2 = qr(a2)
-    val QR3 = qr(a3)
-    val QR4 = qr(a4)
+    val QR1 = QRUtils.qrQR(a1)
+    val QR2 = QRUtils.qrQR(a2)
+    val QR3 = QRUtils.qrQR(a3)
+    val QR4 = QRUtils.qrQR(a4)
 
-    var R = DenseMatrix.vertcat(QR1.r, QR2.r)
-    R = DenseMatrix.vertcat(R, QR3.r)
-    R = DenseMatrix.vertcat(R, QR4.r)
+    var R = DenseMatrix.vertcat(QR1._2, QR2._2)
+    R = DenseMatrix.vertcat(R, QR3._2)
+    R = DenseMatrix.vertcat(R, QR4._2)
 
-    val QTB1 = QR1.q.t*b1
-    val QTB2 = QR2.q.t*b2
-    val QTB3 = QR3.q.t*b3
-    val QTB4 = QR4.q.t*b4
+    val QTB1 = QR1._1.t*b1
+    val QTB2 = QR2._1.t*b2
+    val QTB3 = QR3._1.t*b3
+    val QTB4 = QR4._1.t*b4
 
     var QTB = DenseMatrix.vertcat(QTB1, QTB2)
     QTB = DenseMatrix.vertcat(QTB, QTB3)
