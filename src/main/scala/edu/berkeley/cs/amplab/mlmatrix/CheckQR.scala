@@ -22,7 +22,14 @@ import org.apache.spark.SparkContext._
 object CheckQR extends Logging with Serializable {
 
   /* Returns x*/
-  def localQR(a1: DenseMatrix[Double], a2: DenseMatrix[Double], a3: DenseMatrix[Double], a4: DenseMatrix[Double], b1: DenseMatrix[Double], b2: DenseMatrix[Double], b3: DenseMatrix[Double], b4: DenseMatrix[Double], lambda: Double){
+  def localQR(a1: DenseMatrix[Double],
+    a2: DenseMatrix[Double],
+     a3: DenseMatrix[Double],
+     a4: DenseMatrix[Double],
+     b1: DenseMatrix[Double],
+     b2: DenseMatrix[Double],
+     b3: DenseMatrix[Double],
+     b4: DenseMatrix[Double], lambda: Double): DenseMatrix[Double] = {
     val QR1 = qr(a1)
     val QR2 = qr(a2)
     val QR3 = qr(a3)
@@ -42,19 +49,34 @@ object CheckQR extends Logging with Serializable {
     QTB = DenseMatrix.vertcat(QTB, QTB4)
 
     val reg = DenseMatrix.eye[Double](R.cols) :* math.sqrt(lambda)
-    val QTBStacked = DenseMatrix.vertcat(QTB, DenseMatrix.zeros[Double](R.cols, b1Local.cols))
+    val QTBStacked = DenseMatrix.vertcat(QTB, DenseMatrix.zeros[Double](R.cols, b1.cols))
     val RStacked = DenseMatrix.vertcat(R, reg)
     RStacked \ QTBStacked
   }
 
-  val localNormal(a1: DenseMatrix[Double], a2: DenseMatrix[Double], a3: DenseMatrix[Double], a4: DenseMatrix[Double], b1: DenseMatrix[Double], b2: DenseMatrix[Double], b3: DenseMatrix[Double], b4: DenseMatrix[Double], lambda: Double){
+  def localNormal(a1: DenseMatrix[Double],
+    a2: DenseMatrix[Double],
+    a3: DenseMatrix[Double],
+    a4: DenseMatrix[Double],
+    b1: DenseMatrix[Double],
+     b2: DenseMatrix[Double],
+     b3: DenseMatrix[Double],
+     b4: DenseMatrix[Double], lambda: Double): DenseMatrix[Double] = {
     val ATA = a1.t*a1 + a2.t*a2 + a3.t*a3 + a4.t*a4
     val ATB = a1.t*b1 + a2.t*b2 + a3.t*b3 + a4.t*b4
     (ATA + (DenseMatrix.eye[Double](ATA.rows):*lambda)) \ ATB
   }
 
-  val localResidual(x: DenseMatrix[Double], a1: DenseMatrix[Double], a2: DenseMatrix[Double], a3: DenseMatrix[Double], a4: DenseMatrix[Double], b1: DenseMatrix[Double], b2: DenseMatrix[Double], b3: DenseMatrix[Double], b4: DenseMatrix[Double], lambda: Double){
-    val residSquared = norm(a1*x - b1)*norm(a1*x-b1) + norm(a2*x-b2)*norm(a2*x - b2) + norm(a3*x-b3)*norm(a3*x-b3) + norm(a4*x-b4)*norm(a4*x-b4) + lambda*norm(x)*norm(x)
+  def localResidual(x: DenseMatrix[Double],
+    a1: DenseMatrix[Double],
+    a2: DenseMatrix[Double],
+    a3: DenseMatrix[Double],
+    a4: DenseMatrix[Double],
+    b1: DenseMatrix[Double],
+    b2: DenseMatrix[Double],
+    b3: DenseMatrix[Double],
+    b4: DenseMatrix[Double], lambda: Double): Double = {
+    val residSquared = norm((a1*x - b1).toDenseVector)*norm((a1*x-b1).toDenseVector) + norm((a2*x-b2).toDenseVector)*norm((a2*x - b2).toDenseVector) + norm((a3*x-b3).toDenseVector)*norm((a3*x-b3).toDenseVector) + norm((a4*x-b4).toDenseVector)*norm((a4*x-b4).toDenseVector) + lambda*norm(x.toDenseVector)*norm(x.toDenseVector)
     math.sqrt(residSquared)
   }
 
@@ -110,7 +132,7 @@ object CheckQR extends Logging with Serializable {
     // Lets cache and assert a few things
     trainZipped.count
 
-    var daisyTrain = DenseMatrix[Double].fromArray(trainZipped.map(p => p._1._1)).cache()
+    var daisyTrain = RowPartitionedMatrix.fromArray(trainZipped.map(p => p._1._1)).cache()
     val daisyB = RowPartitionedMatrix.fromArray(trainZipped.map(p => p._1._2)).cache()
     val lcsTrain = RowPartitionedMatrix.fromArray(trainZipped.map(p => p._2._1)).cache()
     val lcsB = RowPartitionedMatrix.fromArray(trainZipped.map(p => p._2._2)).cache()
@@ -121,7 +143,6 @@ object CheckQR extends Logging with Serializable {
     lcsB.rdd.count
     trainZipped.unpersist()
 
-    /*
 
     //Daisy QR results
     val (daisyR, daisyQTB) = new TSQR().returnQRResult(daisyTrain,daisyB)
@@ -137,7 +158,7 @@ object CheckQR extends Logging with Serializable {
     val distributedNormalResidual = Utils.computeResidualNormWithL2(daisyTrain, daisyB, daisyXNormal, lambda)
     println("Distributed QR Residual is " + distributedQRResidual)
     println("Distributed Normal Residual is " + distributedNormalResidual)
-    */
+
 
 
     /*
@@ -166,15 +187,20 @@ object CheckQR extends Logging with Serializable {
     val localXNormal = (ATA + (DenseMatrix.eye[Double](ATA.rows):*lambda)) \ ATB
     */
 
-    val numRows = daisyTrain.rows()
+    val numRows = daisyTrain.numRows()
     println("numRows is " + numRows)
 
-    /*
 
-    val a1 = daisyTrain(0 until numRows/4, ::).collect()
-    val a2 = daisyTrain(numRows/4 until 2*numRows/4, ::).collect()
-    val a3 = daisyTrain(2*numRows/4 until 3*numRows/4, ::).collect()
-    val a4 = daisyTrain(3*numRows/4 until numRows, ::).collect()
+    val m = math.floor(numRows/4).toInt
+    val a1 = daisyTrain(0 until m, ::).collect()
+    val a2 = daisyTrain(m until 2*m, ::).collect()
+    val a3 = daisyTrain(2*m until 3*m, ::).collect()
+    val a4 = daisyTrain(3*m until numRows.toInt, ::).collect()
+
+    val b1 = daisyB(0 until m, ::).collect()
+    val b2 = daisyB(m until 2*m, ::).collect()
+    val b3 = daisyB(2*m until 3*m, ::).collect()
+    val b4 = daisyB(3*m until numRows.toInt, ::).collect()
 
     val localXQR = localQR(a1, a2, a3, a4, b1, b2, b3, b4, lambda)
     val localXNormal = localNormal(a1, a2, a3, a4, b1, b2, b3, b4, lambda)
@@ -198,7 +224,7 @@ object CheckQR extends Logging with Serializable {
 
     println("Local QR Residual is " + localQRResidual)
     println("Local Normal Residual is " + localNormalResidual)
-    */
+
 
   }
 }
