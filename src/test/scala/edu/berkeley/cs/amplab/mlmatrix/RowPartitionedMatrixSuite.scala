@@ -124,10 +124,18 @@ class RowPartitionedMatrixSuite extends FunSuite with LocalSparkContext with Log
     assert(result.numCols() === 6, "horzcat() returns a result with incorrect col count")
     assert(result.collect() === DenseMatrix((1, 2, 3, 1, 2, 3), (1, 9, -1, 1, 9, -1), (0, 0, 1, 0, 0, 1), (0, 1, 0, 0, 1, 0)),
      "horzcat() returns incorrect answer")
-
-
   }
 
+  test("collect") {
+    sc = new SparkContext("local", "test")
+    val matrixParts = (0 until 200).map { i =>
+      DenseMatrix.rand(50, 10)
+    }
+    val r = RowPartitionedMatrix.fromMatrix(sc.parallelize(matrixParts, 200))
+    val rL = matrixParts.reduceLeftOption((a, b) => DenseMatrix.vertcat(a, b)).getOrElse(new DenseMatrix[Double](0, 0))
+    val rD = r.collect()
+    assert(rL == rD)
+  }
 
 
 }
