@@ -167,6 +167,7 @@ object CheckQR extends Logging with Serializable {
     */
 
     val numRows = daisyTrain.rows()
+    println("numRows is " + numRows)
 
     /*
 
