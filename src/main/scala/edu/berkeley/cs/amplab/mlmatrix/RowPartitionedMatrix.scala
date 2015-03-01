@@ -189,7 +189,6 @@ class RowPartitionedMatrix(
     require(numRows() * numCols() <= Integer.MAX_VALUE, "Cannot collect matrix of size " + numRows() + " " + numCols() + " to a local array")
 
     val parts = rdd.map(x => x.mat).collect()
-    parts.reduceLeftOption((a,b) => DenseMatrix.vertcat(a, b)).getOrElse(new DenseMatrix[Double](0, 0))
     val fullMat = new Array[Double]( (numRows() * numCols()).toInt )
 
     // Fill in row at a time but in column major order
