@@ -219,11 +219,12 @@ object CheckQR extends Logging with Serializable {
       println("x from QR fails")
     }
 
-    val localQRResidual = localResidual(localXQR, a1, a2, a3, a4, b1, b2, b3, b4, lambda)
     val localNormalResidual = localResidual(localXNormal, a1, a2, a3, a4, b1, b2, b3, b4, lambda)
-
-    println("Local QR Residual is " + localQRResidual)
     println("Local Normal Residual is " + localNormalResidual)
+
+    val localQRResidual = localResidual(localXQR, a1, a2, a3, a4, b1, b2, b3, b4, lambda)
+    println("Local QR Residual is " + localQRResidual)
+
 
 
   }
