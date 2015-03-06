@@ -226,6 +226,8 @@ class TSQR extends RowPartitionedSolver with Logging with Serializable {
     } else {
       val begin = System.nanoTime
       val out = QRUtils.qrSolve(aPart, bPart)
+      println("Building QR Tree....")
+      println("2-norm of R inside QR tree is " + norm(out._1.toDenseVector) + " at time " + localQR)
       localQR += ((System.nanoTime - begin) / 1000000)
       out
     }
@@ -248,6 +250,7 @@ class TSQR extends RowPartitionedSolver with Logging with Serializable {
     val begin = System.nanoTime
     val out = QRUtils.qrSolve(DenseMatrix.vertcat(a._1, b._1),
       DenseMatrix.vertcat(a._2, b._2))
+    println("2-norm of R inside reduceQR is " + norm(out._1.toDenseVector) +" at time " + acc)
     acc += ((System.nanoTime - begin) / 1e6)
     out
   }
