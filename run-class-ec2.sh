@@ -8,11 +8,11 @@ SOLVER=normal
 LAMBDA=0.1
 CLASS="CheckQR"
 THRESH=1e-8
-
+DATASET="daisy"
 
 SPARK_MASTER=`cat /root/spark-ec2/cluster-url`
 
-ID=$CLASS-imagenet-$PARTS-$LAMBDA-$THRESH-`date +"%Y_%m_%d_%H_%M_%S"`
+ID=$CLASS-EC2-$DATASET-$PARTS-$LAMBDA-$THRESH-`date +"%Y_%m_%d_%H_%M_%S"`
 
 /root/spark/bin/spark-submit \
   --class edu.berkeley.cs.amplab.mlmatrix.$CLASS \
@@ -20,6 +20,6 @@ ID=$CLASS-imagenet-$PARTS-$LAMBDA-$THRESH-`date +"%Y_%m_%d_%H_%M_%S"`
   --driver-memory $DRIVER_MEM \
   --master $SPARK_MASTER \
   $FAT_JAR \
-  $SPARK_MASTER $DATA_DIR $PARTS $SOLVER $LAMBDA $THRESH \
+  $SPARK_MASTER $DATA_DIR $PARTS $SOLVER $LAMBDA $THRESH $DATASET \
   2>$ID.stderr \
   1>$ID.stdout
