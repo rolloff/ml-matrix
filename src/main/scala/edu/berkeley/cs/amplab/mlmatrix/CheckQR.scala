@@ -1,5 +1,8 @@
 package edu.berkeley.cs.amplab.mlmatrix
 
+import java.io.File
+import java.util.concurrent.ThreadLocalRandom
+
 import scala.io.Source._
 
 import breeze.linalg._
@@ -38,6 +41,8 @@ object CheckQR extends Logging with Serializable {
     var R = DenseMatrix.vertcat(QR1._2, QR2._2)
     R = DenseMatrix.vertcat(R, QR3._2)
     R = DenseMatrix.vertcat(R, QR4._2)
+
+    csvwrite(new File("LocalRMatrix-"+ scala.util.Random.nextInt),  R)
 
     val QTB1 = QR1._1.t*b1
     val QTB2 = QR2._1.t*b2
@@ -82,8 +87,8 @@ object CheckQR extends Logging with Serializable {
 
 
   def main(args: Array[String]) {
-    if (args.length < 5) {
-      println("Usage: CheckQR <master> <data_dir> <parts> <lambda> <thresh>")
+    if (args.length < 6) {
+      println("Usage: CheckQR <master> <data_dir> <parts> <lambda> <thresh> <dataset>")
       System.exit(0)
     }
 
@@ -95,6 +100,8 @@ object CheckQR extends Logging with Serializable {
     val lambda = args(3).toDouble
     //Threshold for error checks
     val thresh = args(4).toDouble
+    //Dataset - currently have lcs, timit, and daisy
+    val dataset = args(5).toString
 
     println("Running Fusion with ")
     println("master: " + sparkMaster)
@@ -102,6 +109,7 @@ object CheckQR extends Logging with Serializable {
     println("parts: " + parts)
     println("lambda: " + lambda)
     println("thresh: " + thresh)
+    println("dataset: " + dataset)
 
     val conf = new SparkConf()
       .setMaster(sparkMaster)
@@ -109,118 +117,108 @@ object CheckQR extends Logging with Serializable {
       .setJars(SparkContext.jarOfClass(this.getClass).toSeq)
     val sc = new SparkContext(conf)
 
-    // Daisy filenames
-    val daisyTrainFilename = directory + "daisy-aPart1-1/"
-    val daisyBFilename = directory + "daisy-null-labels/"
+    // Filenames
+    var trainFilename = directory
+    var bFilename = directory
+    dataset.toLowerCase match {
+      case "daisy" =>
+        trainFilename += "daisy-aPart1-1/"
+        bFilename += "daisy-null-labels/"
+      case "lcs" =>
+        trainFilename += "lcs-aPart1-1/"
+        bFilename += "lcs-null-labels/"
+      case "timit" =>
+        trainFilename += "timit-fft-aPart1-1/"
+        bFilename += "timit-fft-null-labels/"
+      case _ =>
+        logError("Invalid dataset, " + dataset + " should be in {timit, lcs, daisy}")
+        logError("Using daisy")
+        trainFilename += "daisy-aPart1-1/"
+        bFilename += "daisy-null-labels/"
+    }
 
-    // LCS filenames
-    val lcsTrainFilename = directory + "lcs-aPart1-1/"
-    val lcsBFilename = directory + "lcs-null-labels/"
 
     // load matrix RDDs
-    val daisyTrainRDD = Utils.loadMatrixFromFile(sc, daisyTrainFilename, parts)
-    val daisyBRDD = Utils.loadMatrixFromFile(sc, daisyBFilename, parts)
-
-    val lcsTrainRDD = Utils.loadMatrixFromFile(sc, lcsTrainFilename, parts)
-    val lcsBRDD = Utils.loadMatrixFromFile(sc, lcsBFilename, parts)
-
-
-    var daisyZipped = daisyTrainRDD.zip(daisyBRDD)
-    var lcsZipped = lcsTrainRDD.zip(lcsBRDD)
-    val trainZipped = daisyZipped.zip(lcsZipped).repartition(parts).cache()
+    val trainRDD = Utils.loadMatrixFromFile(sc, trainFilename, parts)
+    val bRDD = Utils.loadMatrixFromFile(sc, bFilename, parts)
+    var trainZipped = trainRDD.zip(bRDD).repartition(parts).cache()
 
     // Lets cache and assert a few things
     trainZipped.count
 
-    var daisyTrain = RowPartitionedMatrix.fromArray(trainZipped.map(p => p._1._1)).cache()
-    val daisyB = RowPartitionedMatrix.fromArray(trainZipped.map(p => p._1._2)).cache()
-    val lcsTrain = RowPartitionedMatrix.fromArray(trainZipped.map(p => p._2._1)).cache()
-    val lcsB = RowPartitionedMatrix.fromArray(trainZipped.map(p => p._2._2)).cache()
+    // Create matrices
+    var train = RowPartitionedMatrix.fromArray(trainZipped.map(p => p._1)).cache()
+    val b = RowPartitionedMatrix.fromArray(trainZipped.map(p => p._2)).cache()
 
-    daisyTrain.rdd.count
-    daisyB.rdd.count
-    lcsTrain.rdd.count
-    lcsB.rdd.count
+    train.rdd.count
+    b.rdd.count
     trainZipped.unpersist()
 
 
-    //Daisy QR results
-    val (daisyR, daisyQTB) = new TSQR().returnQRResult(daisyTrain,daisyB)
-    val daisyRStacked = DenseMatrix.vertcat(daisyR, DenseMatrix.eye[Double](daisyR.cols):*math.sqrt(lambda))
-    val daisyQTBStacked = DenseMatrix.vertcat(daisyQTB, new DenseMatrix[Double](daisyR.cols, daisyQTB.cols))
-    val daisyXQR = daisyRStacked \ daisyQTBStacked
+    // Distributed QR
+    val result = new TSQR().returnQRResult(train, b)
+    val R = result._1
+    csvwrite(new File("DistributedRMatrix-"+ scala.util.Random.nextInt),  R)
+    val QTB = result._2
+    val RStacked = DenseMatrix.vertcat(R, DenseMatrix.eye[Double](R.cols):*math.sqrt(lambda))
+    val QTBStacked = DenseMatrix.vertcat(QTB, new DenseMatrix[Double](R.cols, QTB.cols))
+    val XQR = RStacked \ QTBStacked
+    csvwrite(new File("DistributedXQR-"+ scala.util.Random.nextInt),  XQR)
 
-    //Daisy Normal Equation results
-    val daisyXNormal = new NormalEquations().solveLeastSquaresWithL2(daisyTrain, daisyB, lambda)
+    // Distributed Normal Equations
+    val XNormal = new NormalEquations().solveLeastSquaresWithL2(train, b, lambda)
+    csvwrite(new File("DistributedXNormal-"+ scala.util.Random.nextInt),  XNormal)
 
-
-    val distributedQRResidual = Utils.computeResidualNormWithL2(daisyTrain, daisyB, daisyXQR, lambda)
-    val distributedNormalResidual = Utils.computeResidualNormWithL2(daisyTrain, daisyB, daisyXNormal, lambda)
+    val distributedQRResidual = Utils.computeResidualNormWithL2(train, b, XQR, lambda)
+    val distributedNormalResidual = Utils.computeResidualNormWithL2(train, b, XNormal, lambda)
     println("Distributed QR Residual is " + distributedQRResidual)
     println("Distributed Normal Residual is " + distributedNormalResidual)
 
 
-
-    /*
-    // Solve for Daisy x using local QR solve
-    val localA = daisyTrain.collect()
-    val localB = daisyB.collect()
-    val reg = DenseMatrix.eye[Double](localA.cols) :* math.sqrt(lambda)
-
-
-    //Perform concatenation before QR
-    val toSolve = DenseMatrix.vertcat(localA, reg)
-    val localQR = qr(toSolve)
-    val localQTB = (localQR.q.t * DenseMatrix.vertcat(localB, DenseMatrix.zeros[Double](localA.cols, localB.cols)))
-    val localX = localQR.r \ localQTB
-
-    //Perform concatenation after QR
-    val localQR = qr(localA)
-    val localQTB = (localQR.q.t*localB)
-    val localQTBStacked = DenseMatrix.vertcat(localQTB, DenseMatrix.zeros[Double](localA.cols, localB.cols))
-    val localRStacked = DenseMatrix.vertcat(localQR.r, reg)
-    val localXQR = localRStacked \ localQTBStacked
-
-    //Local Normal Equations
-    val ATA = localA.t*localA
-    val ATB = localA.t*localB
-    val localXNormal = (ATA + (DenseMatrix.eye[Double](ATA.rows):*lambda)) \ ATB
-    */
-
-    val numRows = daisyTrain.numRows()
+    val numRows = train.numRows()
     println("numRows is " + numRows)
 
 
+    // Collect locally into four different matrices to avoid negative java array exception
     val m = math.floor(numRows/4).toInt
-    val a1 = daisyTrain(0 until m, ::).collect()
-    val a2 = daisyTrain(m until 2*m, ::).collect()
-    val a3 = daisyTrain(2*m until 3*m, ::).collect()
-    val a4 = daisyTrain(3*m until numRows.toInt, ::).collect()
+    val a1 = train(0 until m, ::).collect()
+    val a2 = train(m until 2*m, ::).collect()
+    val a3 = train(2*m until 3*m, ::).collect()
+    val a4 = train(3*m until numRows.toInt, ::).collect()
 
-    val b1 = daisyB(0 until m, ::).collect()
-    val b2 = daisyB(m until 2*m, ::).collect()
-    val b3 = daisyB(2*m until 3*m, ::).collect()
-    val b4 = daisyB(3*m until numRows.toInt, ::).collect()
+    val b1 = b(0 until m, ::).collect()
+    val b2 = b(m until 2*m, ::).collect()
+    val b3 = b(2*m until 3*m, ::).collect()
+    val b4 = b(3*m until numRows.toInt, ::).collect()
 
-    val localXQR = localQR(a1, a2, a3, a4, b1, b2, b3, b4, lambda)
+
+    // Local Normal Solve
     val localXNormal = localNormal(a1, a2, a3, a4, b1, b2, b3, b4, lambda)
+    csvwrite(new File("LocalXNormal-"+ scala.util.Random.nextInt),  localXNormal)
 
-
-    if(Utils.aboutEq(daisyXNormal, localXNormal)){
-      println("x from normal paasses")
+    val normalRelError = norm(XNormal.toDenseVector - localXNormal.toDenseVector) / norm(localXNormal.toDenseVector)
+    println("Relative error between distributed normal solve and local normal solve is " + normalRelError)
+    if(normalRelError < thresh) {
+      println("x from normal passes")
     }else{
       println("x from normal fails")
     }
+    val localNormalResidual = localResidual(localXNormal, a1, a2, a3, a4, b1, b2, b3, b4, lambda)
+    println("Local Normal Residual is " + localNormalResidual)
 
 
-    if(Utils.aboutEq(daisyXQR, localXQR)){
+    // Local QR Solve
+    val localXQR = localQR(a1, a2, a3, a4, b1, b2, b3, b4, lambda)
+    csvwrite(new File("LocalXQR-"+ scala.util.Random.nextInt),  localXQR)
+
+
+    val qrRelError = norm(XQR.toDenseVector - localXQR.toDenseVector) / norm(localXQR.toDenseVector)
+    println("Relative error between distributed qr solve and local qr solve is " + qrRelError)
+    if(qrRelError < thresh){
       println("x from QR passes")
     }else{
       println("x from QR fails")
     }
-
-    val localNormalResidual = localResidual(localXNormal, a1, a2, a3, a4, b1, b2, b3, b4, lambda)
-    println("Local Normal Residual is " + localNormalResidual)
 
     val localQRResidual = localResidual(localXQR, a1, a2, a3, a4, b1, b2, b3, b4, lambda)
     println("Local QR Residual is " + localQRResidual)

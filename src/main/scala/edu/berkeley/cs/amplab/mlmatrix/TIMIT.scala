@@ -83,7 +83,7 @@ object TIMIT extends Logging with Serializable {
       .setJars(SparkContext.jarOfClass(this.getClass).toSeq)
     val sc = new SparkContext(conf)
 
-    // Daisy filenames
+    // Timit filenames
     val timitTrainFilename = directory + "timit-fft-aPart1-1/"
     val timitTestFilename = directory + "timit-fft-testRPM-test-1/"
     val timitBFilename = directory + "timit-fft-null-labels/"
