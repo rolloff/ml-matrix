@@ -32,7 +32,7 @@ object CheckQR extends Logging with Serializable {
      b1: DenseMatrix[Double],
      b2: DenseMatrix[Double],
      b3: DenseMatrix[Double],
-     b4: DenseMatrix[Double], lambda: Double): DenseMatrix[Double] = {
+     b4: DenseMatrix[Double], lambda: Double): (DenseMatrix[Double], DenseMatrix[Double]) = {
     val QR1 = QRUtils.qrQR(a1)
     val QR2 = QRUtils.qrQR(a2)
     val QR3 = QRUtils.qrQR(a3)
@@ -56,7 +56,7 @@ object CheckQR extends Logging with Serializable {
     val reg = DenseMatrix.eye[Double](R.cols) :* math.sqrt(lambda)
     val QTBStacked = DenseMatrix.vertcat(QTB, DenseMatrix.zeros[Double](R.cols, b1.cols))
     val RStacked = DenseMatrix.vertcat(R, reg)
-    RStacked \ QTBStacked
+    (QTBStacked, RStacked)
   }
 
   def localNormal(a1: DenseMatrix[Double],
@@ -163,23 +163,16 @@ object CheckQR extends Logging with Serializable {
     val RStacked = DenseMatrix.vertcat(R, DenseMatrix.eye[Double](R.cols):*math.sqrt(lambda))
     val QTBStacked = DenseMatrix.vertcat(QTB, new DenseMatrix[Double](R.cols, QTB.cols))
     val XQR = RStacked \ QTBStacked
-    csvwrite(new File("DistributedXQR-"+ scala.util.Random.nextInt),  XQR)
+    val distributedQRResidual = RStacked*QTBStacked - XQR
 
-    // Distributed Normal Equations
-    val XNormal = new NormalEquations().solveLeastSquaresWithL2(train, b, lambda)
-    csvwrite(new File("DistributedXNormal-"+ scala.util.Random.nextInt),  XNormal)
+    csvwrite(new File("DistributedQRResidual-"+ scala.util.Random.nextInt),  distributedQRResidual)
+    val normDistributedQRResidual = Utils.computeResidualNormWithL2(train, b, XQR, lambda)
 
-    val distributedQRResidual = Utils.computeResidualNormWithL2(train, b, XQR, lambda)
-    val distributedNormalResidual = Utils.computeResidualNormWithL2(train, b, XNormal, lambda)
-    println("Distributed QR Residual is " + distributedQRResidual)
-    println("Distributed Normal Residual is " + distributedNormalResidual)
-
-
-    val numRows = train.numRows()
-    println("numRows is " + numRows)
+    println("Norm of distributed QR Residual is " + normDistributedQRResidual)
 
 
     // Collect locally into four different matrices to avoid negative java array exception
+    val numRows = train.numRows()
     val m = math.floor(numRows/4).toInt
     val a1 = train(0 until m, ::).collect()
     val a2 = train(m until 2*m, ::).collect()
@@ -191,37 +184,20 @@ object CheckQR extends Logging with Serializable {
     val b3 = b(2*m until 3*m, ::).collect()
     val b4 = b(3*m until numRows.toInt, ::).collect()
 
-
-    // Local Normal Solve
-    val localXNormal = localNormal(a1, a2, a3, a4, b1, b2, b3, b4, lambda)
-    csvwrite(new File("LocalXNormal-"+ scala.util.Random.nextInt),  localXNormal)
-
-    val normalRelError = norm(XNormal.toDenseVector - localXNormal.toDenseVector) / norm(localXNormal.toDenseVector)
-    println("Relative error between distributed normal solve and local normal solve is " + normalRelError)
-    if(normalRelError < thresh) {
-      println("x from normal passes")
-    }else{
-      println("x from normal fails")
-    }
-    val localNormalResidual = localResidual(localXNormal, a1, a2, a3, a4, b1, b2, b3, b4, lambda)
-    println("Local Normal Residual is " + localNormalResidual)
-
-
     // Local QR Solve
-    val localXQR = localQR(a1, a2, a3, a4, b1, b2, b3, b4, lambda)
-    csvwrite(new File("LocalXQR-"+ scala.util.Random.nextInt),  localXQR)
+    val localQRResult = localQR(a1, a2, a3, a4, b1, b2, b3, b4, lambda)
+    val localXQR = localQRResult._2 \localQRResult._1
+    val localQRResidual = localQRResult._1*localXQR - localQRResult._2
+
+    csvwrite(new File("LocalQRResidual-"+ scala.util.Random.nextInt),  localQRResidual)
+
+    val normLocalQRResidual = localResidual(localXQR, a1, a2, a3, a4, b1, b2, b3, b4, lambda)
+    println("Norm of local QR Residual is " + normLocalQRResidual)
+
+    //Difference
+    println("Norm of residual differences is " + norm((localQRResidual-distributedQRResidual).toDenseVector))
 
 
-    val qrRelError = norm(XQR.toDenseVector - localXQR.toDenseVector) / norm(localXQR.toDenseVector)
-    println("Relative error between distributed qr solve and local qr solve is " + qrRelError)
-    if(qrRelError < thresh){
-      println("x from QR passes")
-    }else{
-      println("x from QR fails")
-    }
-
-    val localQRResidual = localResidual(localXQR, a1, a2, a3, a4, b1, b2, b3, b4, lambda)
-    println("Local QR Residual is " + localQRResidual)
 
 
 
