@@ -163,7 +163,7 @@ object CheckQR extends Logging with Serializable {
     val RStacked = DenseMatrix.vertcat(R, DenseMatrix.eye[Double](R.cols):*math.sqrt(lambda))
     val QTBStacked = DenseMatrix.vertcat(QTB, new DenseMatrix[Double](R.cols, QTB.cols))
     val XQR = RStacked \ QTBStacked
-    val distributedQRResidual = RStacked*QTBStacked - XQR
+    val distributedQRResidual = RStacked*XQR - QTBStacked
 
     csvwrite(new File("DistributedQRResidual-"+ scala.util.Random.nextInt),  distributedQRResidual)
     val normDistributedQRResidual = Utils.computeResidualNormWithL2(train, b, XQR, lambda)
@@ -187,7 +187,7 @@ object CheckQR extends Logging with Serializable {
     // Local QR Solve
     val localQRResult = localQR(a1, a2, a3, a4, b1, b2, b3, b4, lambda)
     val localXQR = localQRResult._2 \localQRResult._1
-    val localQRResidual = localQRResult._1*localXQR - localQRResult._2
+    val localQRResidual = localQRResult._2*localXQR - localQRResult._1
 
     csvwrite(new File("LocalQRResidual-"+ scala.util.Random.nextInt),  localQRResidual)
 
