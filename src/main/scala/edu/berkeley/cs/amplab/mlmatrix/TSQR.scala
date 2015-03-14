@@ -228,10 +228,10 @@ class TSQR extends RowPartitionedSolver with Logging with Serializable {
       val begin = System.nanoTime
       val out = QRUtils.qrSolve(aPart, bPart)
       localQR += ((System.nanoTime - begin) / 1000000)
-      val stageId = TaskContext.get.stageId
-      val partitionId = TaskContext.get.partitionId
-      println("2-norm of R inside QR tree is " + norm(out._1.toDenseVector) + " at time " + localQR +
-              "stage " + stageId + " partition " + partitionId)
+      //val stageId = TaskContext.get.stageId
+      //val partitionId = TaskContext.get.partitionId
+      //println("2-norm of R inside QR tree is " + norm(out._1.toDenseVector) + " at time " + localQR +
+      //        "stage " + stageId + " partition " + partitionId)
       out
     }
   }
@@ -254,10 +254,10 @@ class TSQR extends RowPartitionedSolver with Logging with Serializable {
     val out = QRUtils.qrSolve(DenseMatrix.vertcat(a._1, b._1),
       DenseMatrix.vertcat(a._2, b._2))
     acc += ((System.nanoTime - begin) / 1e6)
-    val stageId = TaskContext.get.stageId
-    val partitionId = TaskContext.get.partitionId
-    println("2-norm of R inside reduceQR is " + norm(out._1.toDenseVector) +" at time " + acc + " " +
-            "stage " + stageId + " partition " + partitionId)
+    //val stageId = TaskContext.get.stageId
+    //val partitionId = TaskContext.get.partitionId
+    //println("2-norm of R inside reduceQR is " + norm(out._1.toDenseVector) +" at time " + acc + " " +
+      //      "stage " + stageId + " partition " + partitionId)
     out
   }
 
