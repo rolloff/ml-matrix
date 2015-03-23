@@ -42,8 +42,6 @@ object CheckQR extends Logging with Serializable {
     R = DenseMatrix.vertcat(R, QR3._2)
     R = DenseMatrix.vertcat(R, QR4._2)
 
-    csvwrite(new File("LocalRMatrix-"+ scala.util.Random.nextInt),  R)
-
     val QTB1 = QR1._1.t*b1
     val QTB2 = QR2._1.t*b2
     val QTB3 = QR3._1.t*b3
@@ -53,6 +51,12 @@ object CheckQR extends Logging with Serializable {
     QTB = DenseMatrix.vertcat(QTB, QTB3)
     QTB = DenseMatrix.vertcat(QTB, QTB4)
 
+    // Final QR reduction
+    val QR5 = QRUtils.qrQR(R)
+    R = QR5._2
+    QTB = QR5._1.t*QTB
+
+    csvwrite(new File("LocalRMatrix-"+ scala.util.Random.nextInt),  R)
     val reg = DenseMatrix.eye[Double](R.cols) :* math.sqrt(lambda)
     val QTBStacked = DenseMatrix.vertcat(QTB, DenseMatrix.zeros[Double](R.cols, b1.cols))
     val RStacked = DenseMatrix.vertcat(R, reg)
