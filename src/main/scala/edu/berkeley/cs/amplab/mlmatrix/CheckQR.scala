@@ -160,6 +160,7 @@ object CheckQR extends Logging with Serializable {
 
 
     // Distributed QR
+    /*
     val result = new TSQR().returnQRResult(train, b)
     val R = result._1
     csvwrite(new File("DistributedRMatrix-"+ scala.util.Random.nextInt),  R)
@@ -173,6 +174,7 @@ object CheckQR extends Logging with Serializable {
     val normDistributedQRResidual = Utils.computeResidualNormWithL2(train, b, XQR, lambda)
 
     println("Norm of distributed QR Residual is " + normDistributedQRResidual)
+    */
 
 
     // Collect locally into four different matrices to avoid negative java array exception
@@ -191,6 +193,7 @@ object CheckQR extends Logging with Serializable {
     // Local QR Solve
     val localQRResult = localQR(a1, a2, a3, a4, b1, b2, b3, b4, lambda)
     val localXQR = localQRResult._2 \localQRResult._1
+    csvwrite(new File("LocalXQR-"+scala.util.Random.nextInt), localXQR)
     val localQRResidual = localQRResult._2*localXQR - localQRResult._1
 
     csvwrite(new File("LocalQRResidual-"+ scala.util.Random.nextInt),  localQRResidual)
@@ -199,7 +202,7 @@ object CheckQR extends Logging with Serializable {
     println("Norm of local QR Residual is " + normLocalQRResidual)
 
     //Difference
-    println("Norm of residual differences is " + norm((localQRResidual-distributedQRResidual).toDenseVector))
+    //println("Norm of residual differences is " + norm((localQRResidual-distributedQRResidual).toDenseVector))
 
 
 
