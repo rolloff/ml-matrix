@@ -169,7 +169,7 @@ object CheckQR extends Logging with Serializable {
     val RStacked = DenseMatrix.vertcat(R, DenseMatrix.eye[Double](R.cols):*math.sqrt(lambda))
     val QTBStacked = DenseMatrix.vertcat(QTB, new DenseMatrix[Double](R.cols, QTB.cols))
     val XQR = RStacked \ QTBStacked
-    csvwrite(new File("DistributedX-"+ scala.util.Random.nextInt), R)
+    csvwrite(new File("DistributedX-"+ scala.util.Random.nextInt), XQR)
     val distributedQRResidual = RStacked*XQR - QTBStacked
 
     csvwrite(new File("DistributedQRResidual-"+ scala.util.Random.nextInt),  distributedQRResidual)
