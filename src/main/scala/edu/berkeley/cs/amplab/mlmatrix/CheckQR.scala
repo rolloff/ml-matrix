@@ -42,20 +42,40 @@ object CheckQR extends Logging with Serializable {
     R = DenseMatrix.vertcat(R, QR3._2)
     R = DenseMatrix.vertcat(R, QR4._2)
 
+    println("Frobenius norm of B is " + math.sqrt(
+      norm(b1.toDenseVector)*norm(b1.toDenseVector)
+      + norm(b2.toDenseVector)*norm(b2.toDenseVector)
+      + norm(b3.toDenseVector)*norm(b3.toDenseVector)
+      +norm(b4.toDenseVector)*norm(b4.toDenseVector))
+    )
+
+    println("Norm of b1: " + norm(b1.toDenseVector))
     val QTB1 = QR1._1.t*b1
+    println("Norm of QTB1: " + norm(QTB1.toDenseVector))
+    println("Norm of b2: " +  norm(b2.toDenseVector))
     val QTB2 = QR2._1.t*b2
+    println("Norm of QTB2: " + norm(QTB2.toDenseVector))
+    println("Norm of b3: " + norm(b3.toDenseVector))
     val QTB3 = QR3._1.t*b3
+    println("Norm of QTB3: " + norm(QTB3.toDenseVector))
+    println("Norm of b4: " + norm(b4.toDenseVector))
     val QTB4 = QR4._1.t*b4
+    println("Norm of QTB4: " + norm(QTB4.toDenseVector))
 
     var QTB = DenseMatrix.vertcat(QTB1, QTB2)
     QTB = DenseMatrix.vertcat(QTB, QTB3)
     QTB = DenseMatrix.vertcat(QTB, QTB4)
 
+    println("Norm of vertically concatenated QTB: " + norm(QTB.toDenseVector))
+    csvwrite(new File("LocalQTB_Before_Final_Reduction-" + scala.util.Random.nextInt), QTB)
+
     // Final QR reduction
     val QR5 = QRUtils.qrQR(R)
     R = QR5._2
     QTB = QR5._1.t*QTB
+    println("Norm of final QTB: " + norm(QTB.toDenseVector))
 
+    csvwrite(new File("LocalQTBFinal-" + scala.util.Random.nextInt), QTB)
     csvwrite(new File("LocalRMatrix-"+ scala.util.Random.nextInt),  R)
     val reg = DenseMatrix.eye[Double](R.cols) :* math.sqrt(lambda)
     val QTBStacked = DenseMatrix.vertcat(QTB, DenseMatrix.zeros[Double](R.cols, b1.cols))
@@ -160,12 +180,12 @@ object CheckQR extends Logging with Serializable {
 
 
     // Distributed QR
-
+/*
     val result = new TSQR().returnQRResult(train, b)
     val R = result._1
     csvwrite(new File("DistributedRMatrix-"+ scala.util.Random.nextInt),  R)
     val QTB = result._2
-    csvwrite(new File("DistributedQTB-" +scala.util.Random.nextInt), R)
+    csvwrite(new File("DistributedQTB-" +scala.util.Random.nextInt), QTB)
     val RStacked = DenseMatrix.vertcat(R, DenseMatrix.eye[Double](R.cols):*math.sqrt(lambda))
     val QTBStacked = DenseMatrix.vertcat(QTB, new DenseMatrix[Double](R.cols, QTB.cols))
     val XQR = RStacked \ QTBStacked
@@ -178,9 +198,9 @@ object CheckQR extends Logging with Serializable {
 
 
     println("Norm of distributed QR Residual is " + normDistributedQRResidual)
+*/
 
 
-    /*
     // Collect locally into four different matrices to avoid negative java array exception
     val numRows = train.numRows()
     val m = math.floor(numRows/4).toInt
@@ -196,18 +216,18 @@ object CheckQR extends Logging with Serializable {
 
     // Local QR Solve
     val localQRResult = localQR(a1, a2, a3, a4, b1, b2, b3, b4, lambda)
-    val localXQR = localQRResult._2 \localQRResult._1
-    csvwrite(new File("LocalXQR-"+scala.util.Random.nextInt), localXQR)
-    val localQRResidual = localQRResult._2*localXQR - localQRResult._1
+    val localX = localQRResult._2 \localQRResult._1
+    csvwrite(new File("LocalX-"+scala.util.Random.nextInt), localX)
+    val localQRResidual = localQRResult._2*localX - localQRResult._1
 
     csvwrite(new File("LocalQRResidual-"+ scala.util.Random.nextInt),  localQRResidual)
 
-    val normLocalQRResidual = localResidual(localXQR, a1, a2, a3, a4, b1, b2, b3, b4, lambda)
+    val normLocalQRResidual = localResidual(localX, a1, a2, a3, a4, b1, b2, b3, b4, lambda)
     println("Norm of local QR Residual is " + normLocalQRResidual)
 
     //Difference
-    println("Norm of residual differences is " + norm((localQRResidual-distributedQRResidual).toDenseVector))
-    */
+    //println("Norm of residual differences is " + norm((localQRResidual-distributedQRResidual).toDenseVector))
+
 
 
 
