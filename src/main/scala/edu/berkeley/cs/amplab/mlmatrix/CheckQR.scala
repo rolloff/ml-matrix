@@ -33,9 +33,13 @@ object CheckQR extends Logging with Serializable {
      b2: DenseMatrix[Double],
      b3: DenseMatrix[Double],
      b4: DenseMatrix[Double], lambda: Double): (DenseMatrix[Double], DenseMatrix[Double]) = {
+    println("running localQR1")
     val QR1 = QRUtils.qrQR(a1)
+    println("running localQR2")
     val QR2 = QRUtils.qrQR(a2)
+    println("running localQR3")
     val QR3 = QRUtils.qrQR(a3)
+    println("running localQR4")
     val QR4 = QRUtils.qrQR(a4)
 
     var R = DenseMatrix.vertcat(QR1._2, QR2._2)
@@ -203,16 +207,42 @@ object CheckQR extends Logging with Serializable {
 
     // Collect locally into four different matrices to avoid negative java array exception
     val numRows = train.numRows()
-    val m = math.floor(numRows/4).toInt
-    val a1 = train(0 until m, ::).collect()
-    val a2 = train(m until 2*m, ::).collect()
-    val a3 = train(2*m until 3*m, ::).collect()
-    val a4 = train(3*m until numRows.toInt, ::).collect()
+    val m = math.floor(numRows/8).toInt
+    var a1 = train(0 until m, ::).collect()
+    var a2 = train(m until 2*m, ::).collect()
+    var a3 = train(2*m until 3*m, ::).collect()
+    var a4 = train(3*m until 4*m, ::).collect()
+    var a5 = train(4*m until 5*m, ::).collect()
+    var a6 = train(5*m until 6*m, ::).collect()
+    var a7 = train(6*m until 7*m, ::).collect()
+    var a8 = train(7*m until numRows.toInt, ::).collect()
 
-    val b1 = b(0 until m, ::).collect()
-    val b2 = b(m until 2*m, ::).collect()
-    val b3 = b(2*m until 3*m, ::).collect()
-    val b4 = b(3*m until numRows.toInt, ::).collect()
+    println("FINISHED A COLLECTS")
+
+    var b1 = b(0 until m, ::).collect()
+    var b2 = b(m until 2*m, ::).collect()
+    var b3 = b(2*m until 3*m, ::).collect()
+    var b4 = b(3*m until 4*m, ::).collect()
+    var b5 = b(4*m until 5*m, ::).collect()
+    var b6 = b(5*m until 6*m, ::).collect()
+    var b7 = b(6*m until 7*m, ::).collect()
+    var b8 = b(7*m until numRows.toInt, ::).collect()
+
+    println("FINISHED B COLLECTS")
+
+    a1 = DenseMatrix.vertcat(a1, a2)
+    a2 = DenseMatrix.vertcat(a3, a4)
+    a3 = DenseMatrix.vertcat(a5, a6)
+    a4 = DenseMatrix.vertcat(a7, a8)
+
+    println("FINISHED A VERTCATS")
+
+    b1 = DenseMatrix.vertcat(b1, b2)
+    b2 = DenseMatrix.vertcat(b3, b4)
+    b3 = DenseMatrix.vertcat(b5, b6)
+    b4 = DenseMatrix.vertcat(b7, b8)
+
+    println("FINISHED B VERTCATS")
 
     // Local QR Solve
     val localQRResult = localQR(a1, a2, a3, a4, b1, b2, b3, b4, lambda)

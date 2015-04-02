@@ -1,10 +1,9 @@
 #!/bin/bash
 
-DRIVER_MEM="40g"
+DRIVER_MEM="180g"
 FAT_JAR="/root/ml-matrix/target/scala-2.10/mlmatrix-assembly-0.1.jar"
 DATA_DIR="/"
-PARTS=32
-SOLVER=normal
+PARTS=128
 LAMBDA=0.1
 CLASS="CheckQR"
 THRESH=1e-8
@@ -20,6 +19,6 @@ ID=$CLASS-EC2-$DATASET-$PARTS-$LAMBDA-$THRESH-`date +"%Y_%m_%d_%H_%M_%S"`
   --driver-memory $DRIVER_MEM \
   --master $SPARK_MASTER \
   $FAT_JAR \
-  $SPARK_MASTER $DATA_DIR $PARTS $SOLVER $LAMBDA $THRESH $DATASET \
+  $SPARK_MASTER $DATA_DIR $PARTS $LAMBDA $THRESH $DATASET \
   2>$ID.stderr \
   1>$ID.stdout
