@@ -184,27 +184,27 @@ object CheckQR extends Logging with Serializable {
 
 
     // Distributed QR
-/*
+
     val result = new TSQR().returnQRResult(train, b)
     val R = result._1
-    csvwrite(new File("DistributedRMatrix-"+ scala.util.Random.nextInt),  R)
+    csvwrite(new File("DistributedR-"+ parts ),  R)
     val QTB = result._2
-    csvwrite(new File("DistributedQTB-" +scala.util.Random.nextInt), QTB)
+    csvwrite(new File("DistributedQTB-" +parts), QTB)
     val RStacked = DenseMatrix.vertcat(R, DenseMatrix.eye[Double](R.cols):*math.sqrt(lambda))
     val QTBStacked = DenseMatrix.vertcat(QTB, new DenseMatrix[Double](R.cols, QTB.cols))
     val XQR = RStacked \ QTBStacked
-    csvwrite(new File("DistributedX-"+ scala.util.Random.nextInt), XQR)
+    csvwrite(new File("DistributedX-"+ parts), XQR)
     val distributedQRResidual = RStacked*XQR - QTBStacked
 
-    csvwrite(new File("DistributedQRResidual-"+ scala.util.Random.nextInt),  distributedQRResidual)
+    csvwrite(new File("DistributedResidual-"+ parts),  distributedQRResidual)
     val normDistributedQRResidual = Utils.computeResidualNormWithL2(train, b, XQR, lambda)
 
 
+    println("Distributed Norm of Rx-QTB" + norm(distributedQRResidual.toDenseVector))
+    println("Distributed Norm of Ax-b " + normDistributedQRResidual)
 
-    println("Norm of distributed QR Residual is " + normDistributedQRResidual)
-*/
 
-
+    /*
     // Collect locally into four different matrices to avoid negative java array exception
     val numRows = train.numRows()
     val m = math.floor(numRows/8).toInt
@@ -254,6 +254,7 @@ object CheckQR extends Logging with Serializable {
 
     val normLocalQRResidual = localResidual(localX, a1, a2, a3, a4, b1, b2, b3, b4, lambda)
     println("Norm of local QR Residual is " + normLocalQRResidual)
+    */
 
     //Difference
     //println("Norm of residual differences is " + norm((localQRResidual-distributedQRResidual).toDenseVector))
