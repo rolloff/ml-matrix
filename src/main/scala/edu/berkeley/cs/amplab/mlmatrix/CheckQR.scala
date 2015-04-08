@@ -182,6 +182,8 @@ object CheckQR extends Logging with Serializable {
     b.rdd.count
     trainZipped.unpersist()
 
+    val rowSizes = train.rdd.map{ x => x.mat.rows}.collect()
+    println("Row Sizes : " + rowSizes.mkString(","))
 
     // Distributed QR
 
