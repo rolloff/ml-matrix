@@ -185,8 +185,17 @@ object CheckQR extends Logging with Serializable {
     val rowSizes = train.rdd.map{ x => x.mat.rows}.collect()
     println("Row Sizes : " + rowSizes.mkString(","))
 
-    // Distributed QR
 
+    //Measuring norm(A-QR)/norm(A) and norm(QTQ-I)/norm(Q)
+    val (q, r) = new TSQR().qrQR(train)
+    val qr = q.mapPartitions{ part => part*r}
+    println("norm(A-QR)/norm(A) is " + (train-qr).normFrobenius()/train.normFrobenius())
+    val qtq = q.mapPartitions{ part => part.t*part}.rdd.map{part => part.mat}.reduce{(a,b)=>a+b}
+    println("norm(Q^TQ - I) is " + norm((qtq - DenseMatrix.eye[Double](qtq.rows)).toDenseVector))
+  }
+
+    // Distributed QR
+    /*
     val result = new TSQR().returnQRResult(train, b)
     val R = result._1
     csvwrite(new File("DistributedR-"+ parts ),  R)
@@ -204,6 +213,8 @@ object CheckQR extends Logging with Serializable {
 
     println("Distributed Norm of Rx-QTB" + norm(distributedQRResidual.toDenseVector))
     println("Distributed Norm of Ax-b " + normDistributedQRResidual)
+
+    */
 
 
     /*
@@ -258,13 +269,9 @@ object CheckQR extends Logging with Serializable {
     println("Norm of local QR Residual is " + normLocalQRResidual)
     */
 
+
     //Difference
     //println("Norm of residual differences is " + norm((localQRResidual-distributedQRResidual).toDenseVector))
 
 
-
-
-
-
-  }
 }
