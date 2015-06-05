@@ -170,18 +170,18 @@ object CheckQR extends Logging with Serializable {
     val trainRDD = Utils.loadMatrixFromFile(sc, trainFilename, parts).repartition(parts).cache()
     //val bRDD = Utils.loadMatrixFromFile(sc, bFilename, parts)
     //var trainZipped = trainRDD.zip(bRDD).repartition(parts).cache()
-
     // Lets cache and assert a few things
     //trainZipped.count
 
     // Create matrices
     //var train = RowPartitionedMatrix.fromArray(trainZipped.map(p => p._1)).cache()
     //val b = RowPartitionedMatrix.fromArray(trainZipped.map(p => p._2)).cache()
-    var train = RowPartitionedMatrix.fromArray(trainRDD)
+    var train = RowPartitionedMatrix.fromArray(trainRDD).cache()
 
     train.rdd.count
     //b.rdd.count
     //trainZipped.unpersist()
+    trainRDD.unpersist()
 
 
     //Measuring norm(A-QR)/norm(A) and norm(QTQ-I)/norm(Q)
