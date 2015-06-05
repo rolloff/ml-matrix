@@ -168,19 +168,20 @@ object CheckQR extends Logging with Serializable {
 
     // load matrix RDDs
     val trainRDD = Utils.loadMatrixFromFile(sc, trainFilename, parts)
-    val bRDD = Utils.loadMatrixFromFile(sc, bFilename, parts)
-    var trainZipped = trainRDD.zip(bRDD).repartition(parts).cache()
+    //val bRDD = Utils.loadMatrixFromFile(sc, bFilename, parts)
+    //var trainZipped = trainRDD.zip(bRDD).repartition(parts).cache()
 
     // Lets cache and assert a few things
-    trainZipped.count
+    //trainZipped.count
 
     // Create matrices
-    var train = RowPartitionedMatrix.fromArray(trainZipped.map(p => p._1)).cache()
-    val b = RowPartitionedMatrix.fromArray(trainZipped.map(p => p._2)).cache()
+    //var train = RowPartitionedMatrix.fromArray(trainZipped.map(p => p._1)).cache()
+    //val b = RowPartitionedMatrix.fromArray(trainZipped.map(p => p._2)).cache()
+    var train = RowPartitionedMatrix.fromArray(trainRDD)
 
     train.rdd.count
-    b.rdd.count
-    trainZipped.unpersist()
+    //b.rdd.count
+    //trainZipped.unpersist()
 
     val rowSizes = train.rdd.map{ x => x.mat.rows}.collect()
     println("Row Sizes : " + rowSizes.mkString(","))
