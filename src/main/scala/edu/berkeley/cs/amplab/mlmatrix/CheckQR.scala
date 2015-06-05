@@ -183,9 +183,6 @@ object CheckQR extends Logging with Serializable {
     //b.rdd.count
     //trainZipped.unpersist()
 
-    val rowSizes = train.rdd.map{ x => x.mat.rows}.collect()
-    println("Row Sizes : " + rowSizes.mkString(","))
-
 
     //Measuring norm(A-QR)/norm(A) and norm(QTQ-I)/norm(Q)
     val (q, r) = new TSQR().qrQR(train)
