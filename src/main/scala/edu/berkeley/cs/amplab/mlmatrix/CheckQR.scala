@@ -172,6 +172,7 @@ object CheckQR extends Logging with Serializable {
     //var trainZipped = trainRDD.zip(bRDD).repartition(parts).cache()
     // Lets cache and assert a few things
     //trainZipped.count
+    trainRDD.count
 
     // Create matrices
     //var train = RowPartitionedMatrix.fromArray(trainZipped.map(p => p._1)).cache()
