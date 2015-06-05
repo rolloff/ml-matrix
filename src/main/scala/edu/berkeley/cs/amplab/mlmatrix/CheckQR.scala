@@ -167,7 +167,7 @@ object CheckQR extends Logging with Serializable {
 
 
     // load matrix RDDs
-    val trainRDD = Utils.loadMatrixFromFile(sc, trainFilename, parts)
+    val trainRDD = Utils.loadMatrixFromFile(sc, trainFilename, parts).repartition(parts).cache()
     //val bRDD = Utils.loadMatrixFromFile(sc, bFilename, parts)
     //var trainZipped = trainRDD.zip(bRDD).repartition(parts).cache()
 
