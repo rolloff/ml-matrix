@@ -185,11 +185,16 @@ object CheckQR extends Logging with Serializable {
     trainRDD.unpersist()
 
 
-    //Measuring norm(A-QR)/norm(A) and norm(QTQ-I)/norm(Q)
+    //Measuring norm(A-QR)/norm(A) and norm(QTQ-I)
     val (q, r) = new TSQR().qrQR(train)
     val qr = q.mapPartitions{ part => part*r}
     println("norm(A-QR)/norm(A) is " + (train-qr).normFrobenius()/train.normFrobenius())
+    // Save q out to HDFS
+
     val qtq = q.mapPartitions(part=>part.t*part).rdd.map(part=>part.mat).reduce(_+_)
+    // save qtq to disk
+    csvwrite(new File("QTQ-"+ parts),  qtq)
+    csvwrite(new File("R-"+parts), r)
     println("norm(Q^TQ - I) is " + norm((qtq - DenseMatrix.eye[Double](qtq.rows)).toDenseVector))
   }
 
