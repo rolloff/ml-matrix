@@ -188,13 +188,16 @@ object CheckQR extends Logging with Serializable {
     println("Random Gaussian Experiments")
     train.mapElements(x=> scala.util.Random.nextGaussian)
 
+    // Save the random Gaussian Matrix
+    train.rdd.saveAsTextFile("/A-Gaussian")
+
 
     //Measuring norm(A-QR)/norm(A) and norm(QTQ-I)
     val (q, r) = new TSQR().qrQR(train)
     val qr = q.mapPartitions(part => part*r)
     println("norm(A-QR)/norm(A) is " + (train-qr).normFrobenius()/train.normFrobenius())
     // Save q out to HDFS
-    q.rdd.saveAsTextFile("/Q-Gaussian")
+    q.rdd.saveAsTextFile("/Q-Gaussian "+parts)
     val qtq = q.mapPartitions(part=>part.t*part).rdd.map(part=>part.mat).reduce(_+_)
     // save qtq to disk
     csvwrite(new File("QTQ-"+ parts),  qtq)
