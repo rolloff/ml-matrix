@@ -3,7 +3,7 @@
 SPARK_MEM=8g
 SPARK_MASTER="local"
 DATA_DIR="imagenet-linear-solver-data/"
-PARTS=1
+PARTS=2
 LAMBDA=0.1
 CLASS="CheckQR"
 THRESH=1e-8

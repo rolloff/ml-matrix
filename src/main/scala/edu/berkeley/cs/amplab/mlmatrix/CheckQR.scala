@@ -158,6 +158,8 @@ object CheckQR extends Logging with Serializable {
       case "timit" =>
         trainFilename += "timit-fft-aPart1-1/"
         bFilename += "timit-fft-null-labels/"
+      case "gaussian" =>
+        trainFilename += "A-Gaussian/"
       case _ =>
         logError("Invalid dataset, " + dataset + " should be in {timit, lcs, daisy}")
         logError("Using daisy")
@@ -189,7 +191,7 @@ object CheckQR extends Logging with Serializable {
     train.mapElements(x=> scala.util.Random.nextGaussian)
 
     // Save the random Gaussian Matrix
-    train.rdd.saveAsTextFile("/A-Gaussian")
+    train.rdd.saveAsTextFile(directory + "A-Gaussian")
 
 
     //Measuring norm(A-QR)/norm(A) and norm(QTQ-I)
@@ -197,7 +199,7 @@ object CheckQR extends Logging with Serializable {
     val qr = q.mapPartitions(part => part*r)
     println("norm(A-QR)/norm(A) is " + (train-qr).normFrobenius()/train.normFrobenius())
     // Save q out to HDFS
-    q.rdd.saveAsTextFile("/Q-Gaussian "+parts)
+    q.rdd.saveAsTextFile(directory+"Q-Gaussian "+parts)
     val qtq = q.mapPartitions(part=>part.t*part).rdd.map(part=>part.mat).reduce(_+_)
     // save qtq to disk
     csvwrite(new File("QTQ-"+ parts),  qtq)
