@@ -167,6 +167,8 @@ object CheckQR extends Logging with Serializable {
         bFilename += "daisy-null-labels/"
     }
 
+    //val aRandom = RowPartitionedMatrix.createRandomGaussian()
+
 
     // load matrix RDDs
     val trainRDD = Utils.loadMatrixFromFile(sc, trainFilename, parts).repartition(parts).cache()
@@ -185,7 +187,10 @@ object CheckQR extends Logging with Serializable {
     //b.rdd.count
     //trainZipped.unpersist()
     trainRDD.unpersist()
+    println("number of rows in Daisy: " + train.numRows())
+    println("number of columns in Daisy: " + train.numCols())
 
+    /*
     // Transform train into a random Gaussian matrix
     println("Random Gaussian Experiments")
     train.mapElements(x=> scala.util.Random.nextGaussian)
@@ -205,6 +210,7 @@ object CheckQR extends Logging with Serializable {
     csvwrite(new File("QTQ-"+ parts),  qtq)
     csvwrite(new File("R-"+parts), r)
     println("norm(Q^TQ - I) is " + norm((qtq - DenseMatrix.eye[Double](qtq.rows)).toDenseVector))
+    */
   }
 
     // Distributed QR

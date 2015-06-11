@@ -367,4 +367,26 @@ object RowPartitionedMatrix {
     RowPartitionedMatrix.fromMatrix(matrixParts)
   }
 
+  def createRandomGaussian(sc: SparkContext,
+      numRows: Int,
+      numCols: Int,
+      numParts: Int,
+      cache: Boolean = true): RowPartitionedMatrix = {
+    val rowsPerPart = numRows / numParts
+    val matrixParts = sc.parallelize(1 to numParts, numParts).mapPartitions { part =>
+      val data = new Array[Double](rowsPerPart * numCols)
+      var i = 0
+      while (i < rowsPerPart*numCols) {
+        data(i) = ThreadLocalRandom.current().nextGaussian()
+        i = i + 1
+      }
+      val mat = new DenseMatrix[Double](rowsPerPart, numCols, data)
+      Iterator(mat)
+    }
+    if (cache) {
+      matrixParts.cache()
+    }
+    RowPartitionedMatrix.fromMatrix(matrixParts)
+  }
+
 }
