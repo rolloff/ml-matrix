@@ -2,6 +2,7 @@ package edu.berkeley.cs.amplab.mlmatrix
 
 import java.io.File
 import java.util.concurrent.ThreadLocalRandom
+import java.util.Arrays
 
 import scala.io.Source._
 
@@ -14,6 +15,7 @@ import org.apache.hadoop.io.{LongWritable, Text, Writable}
 
 import edu.berkeley.cs.amplab.mlmatrix.util.QRUtils
 import edu.berkeley.cs.amplab.mlmatrix.util.Utils
+import edu.berkeley.cs.amplab.mlmatrix.util.MatrixUtils
 
 import org.apache.spark.rdd.RDD
 import org.apache.spark.rdd.HadoopRDD
@@ -167,9 +169,9 @@ object CheckQR extends Logging with Serializable {
         bFilename += "daisy-null-labels/"
     }
 
-    //val aRandom = RowPartitionedMatrix.createRandomGaussian()
+    val train = RowPartitionedMatrix.createRandomGaussian(sc, 20, 20, parts, true)
 
-
+    /*
     // load matrix RDDs
     val trainRDD = Utils.loadMatrixFromFile(sc, trainFilename, parts).repartition(parts).cache()
     //val bRDD = Utils.loadMatrixFromFile(sc, bFilename, parts)
@@ -187,30 +189,36 @@ object CheckQR extends Logging with Serializable {
     //b.rdd.count
     //trainZipped.unpersist()
     trainRDD.unpersist()
-    println("number of rows in Daisy: " + train.numRows())
-    println("number of columns in Daisy: " + train.numCols())
 
-    /*
     // Transform train into a random Gaussian matrix
     println("Random Gaussian Experiments")
     train.mapElements(x=> scala.util.Random.nextGaussian)
+    */
 
     // Save the random Gaussian Matrix
-    train.rdd.saveAsTextFile(directory + "A-Gaussian")
+    train.rdd.flatMap(part => MatrixUtils.matrixToRowArray(part.mat)).map {
+      x => x.toArray.mkString(",")
+    }.saveAsTextFile(directory + "A-Gaussian")
 
-
-    //Measuring norm(A-QR)/norm(A) and norm(QTQ-I)
     val (q, r) = new TSQR().qrQR(train)
+
+    // Save Q
+    q.rdd.flatMap(part => MatrixUtils.matrixToRowArray(part.mat)).map {
+      x => x.toArray.mkString(",")
+    }.saveAsTextFile(directory+"Q-Gaussian-"+parts)
+
     val qr = q.mapPartitions(part => part*r)
-    println("norm(A-QR)/norm(A) is " + (train-qr).normFrobenius()/train.normFrobenius())
-    // Save q out to HDFS
-    q.rdd.saveAsTextFile(directory+"Q-Gaussian "+parts)
+    val normA = train.normFrobenius()
+    println("norm(A) is " + normA)
+    println("norm(A-QR)/norm(A) is " + (train-qr).normFrobenius()/normA)
+
     val qtq = q.mapPartitions(part=>part.t*part).rdd.map(part=>part.mat).reduce(_+_)
     // save qtq to disk
     csvwrite(new File("QTQ-"+ parts),  qtq)
     csvwrite(new File("R-"+parts), r)
     println("norm(Q^TQ - I) is " + norm((qtq - DenseMatrix.eye[Double](qtq.rows)).toDenseVector))
-    */
+
+
   }
 
     // Distributed QR
