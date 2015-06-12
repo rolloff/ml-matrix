@@ -169,7 +169,7 @@ object CheckQR extends Logging with Serializable {
         bFilename += "daisy-null-labels/"
     }
 
-    val train = RowPartitionedMatrix.createRandomGaussian(sc, 20, 20, parts, true)
+    val train = RowPartitionedMatrix.createRandomGaussian(sc, 1281167, 4001, parts, true)
 
     /*
     // load matrix RDDs
