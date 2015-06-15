@@ -157,6 +157,8 @@ object CheckQR extends Logging with Serializable {
       case "timit" =>
         trainFilename += "timit-fft-aPart1-1/"
         bFilename += "timit-fft-null-labels/"
+      case "gaussian-100-10" =>
+        trainFilename += "A-Gaussian-1000-10/"
       case "gaussian-1000-10" =>
         trainFilename += "A-Gaussian-1000-10/"
       case "gaussian-10000-10" =>
