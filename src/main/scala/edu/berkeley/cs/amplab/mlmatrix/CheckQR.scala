@@ -206,8 +206,9 @@ object CheckQR extends Logging with Serializable {
 
     val qtq = q.mapPartitions(part=>part.t*part).rdd.map(part=>part.mat).reduce(_+_)
     // save qtq to disk
-    //csvwrite(new File("QTQ-"+dataset + "-" + parts),  qtq)
-    //csvwrite(new File("R-"+dataset + "-" + parts), r)
+    csvwrite(new File("A-"+dataset + "-" + parts), train.collect())
+    csvwrite(new File("Q-"+dataset + "-" + parts),  q.collect())
+    csvwrite(new File("R-"+dataset + "-" + parts), r)
     println("norm(Q^TQ - I) is " + norm((qtq - DenseMatrix.eye[Double](qtq.rows)).toDenseVector))
 
 
