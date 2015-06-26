@@ -163,6 +163,8 @@ object CheckQR extends Logging with Serializable {
         trainFilename += "A-Gaussian-1000-10/"
       case "gaussian-10000-10" =>
           trainFilename += "A-Gaussian-10000-10/"
+      case "gaussian-16-2" =>
+        trainFilename += "A-Gaussian-16-2/"
       case _ =>
         logError("Invalid dataset, " + dataset + " should be in {timit, lcs, daisy}")
         logError("Using daisy")
@@ -172,15 +174,16 @@ object CheckQR extends Logging with Serializable {
 
     // Save a random Gaussian matrix
     /*
-    val train = RowPartitionedMatrix.createRandomGaussian(sc, 10000, 10, parts, true)
+    val train = RowPartitionedMatrix.createRandomGaussian(sc, 16, 2, parts, true)
     train.rdd.flatMap(part => MatrixUtils.matrixToRowArray(part.mat)).map {
       x => x.toArray.mkString(",")
-    }.saveAsTextFile(directory + "A-Gaussian-10000-10")
+    }.saveAsTextFile(directory + "A-Gaussian-16-2")
     */
 
 
-    // load matrix RDDs
-    val trainRDD = Utils.loadMatrixFromFile(sc, trainFilename, parts).repartition(parts).cache()
+
+    // load matrix RDDs, removing repartition
+    val trainRDD = Utils.loadMatrixFromFile(sc, trainFilename, parts).cache()
     //val bRDD = Utils.loadMatrixFromFile(sc, bFilename, parts)
     //var trainZipped = trainRDD.zip(bRDD).repartition(parts).cache()
     // Lets cache and assert a few things
@@ -206,9 +209,9 @@ object CheckQR extends Logging with Serializable {
 
     val qtq = q.mapPartitions(part=>part.t*part).rdd.map(part=>part.mat).reduce(_+_)
     // save qtq to disk
-    csvwrite(new File("A-"+dataset + "-" + parts), (train.collect()))
-    csvwrite(new File("Q-"+dataset + "-" + parts),  (q.collect()))
-    csvwrite(new File("R-"+dataset + "-" + parts), r)
+    csvwrite(new File("A-"+dataset + "-parts-" + parts), (train.collect()))
+    csvwrite(new File("Q-"+dataset + "-parts-" + parts),  (q.collect()))
+    csvwrite(new File("R-"+dataset + "-parts-" + parts), r)
     println("norm(Q^TQ - I) is " + norm((qtq - DenseMatrix.eye[Double](qtq.rows)).toDenseVector))
 
 

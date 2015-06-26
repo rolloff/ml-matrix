@@ -6,7 +6,7 @@ DATA_DIR="imagenet-linear-solver-data/"
 PARTS=2
 LAMBDA=0.1
 CLASS="CheckQR"
-DATASET="gaussian-100-10"
+DATASET="gaussian-16-2"
 
 export SPARK_MEM
 
