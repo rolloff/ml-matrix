@@ -46,8 +46,29 @@ class TSQR extends RowPartitionedSolver with Logging with Serializable {
     // First step run TSQR, get YTR tree
     val (qrTree, r) = qrYTR(mat)
 
+    //Debug qrTree. qrTree is a Seq[(Int, RDD[(Int, (DenseMatrix[Double], Array[Double], DenseMatrix[Double]))])]
+    println("The length of the qrTree Sequence is " + qrTree.length)
+    qrTree.map { part: (Int, RDD[(Int, (DenseMatrix[Double], Array[Double], DenseMatrix[Double]))]) =>
+      val curTreeIdx: Int = part._1
+      val treeRDD: RDD[(Int, (DenseMatrix[Double], Array[Double], DenseMatrix[Double]))] = part._2
+      println("curTreeIdx is " + curTreeIdx + " with tree RDD of size " + treeRDD.partitions.size)
+      val info = treeRDD.map { p =>
+        val id: Int = p._1
+        println("%%%%%%%%%%Inside treeRDD with id " + id)
+        val yPart: DenseMatrix[Double] = p._2._1
+        val tPart: Array[Double] = p._2._2
+
+        println("yPart is " + yPart)
+        println("tPart is " + tPart.mkString(" "))
+        (id, yPart, tPart)
+      }.collect()
+      println("/////////info length is " + info.length)
+    }
+
     var curTreeIdx = qrTree.size - 1
 
+    println("We begin work on constructing q by starting with index " + curTreeIdx)
+    println("Inside the sequence we start with int " + qrTree(curTreeIdx)._1)
     // Now construct Q by going up the tree
     var qrRevTree = qrTree(curTreeIdx)._2.map { part =>
       val yPart = part._2._1
@@ -56,6 +77,8 @@ class TSQR extends RowPartitionedSolver with Logging with Serializable {
       for (i <- 0 until yPart.cols) {
         qIn(i, i) =  1.0
       }
+      val applyQResult = QRUtils.applyQ(yPart, tPart, qIn, transpose=false)
+      println("After applying a householder reflection " + applyQResult)
       (part._1, QRUtils.applyQ(yPart, tPart, qIn, transpose=false))
     }.flatMap { x =>
       val nrows = x._2.rows
@@ -69,10 +92,12 @@ class TSQR extends RowPartitionedSolver with Logging with Serializable {
       curTreeIdx = curTreeIdx - 1
       prevTree = qrRevTree
       if (curTreeIdx > 0) {
+        println("With two partitions we should not end up here")
         val nextNumParts = qrTree(curTreeIdx - 1)._1
         qrRevTree = qrTree(curTreeIdx)._2.join(prevTree).flatMap { part =>
           val yPart = part._2._1._1
           val tPart = part._2._1._2
+
           val qPart = if (part._1 % 2 == 0) {
             val e = math.min(yPart.rows, yPart.cols)
             part._2._2(0 until e, ::)
@@ -81,6 +106,7 @@ class TSQR extends RowPartitionedSolver with Logging with Serializable {
             val s = part._2._2.rows - numRows
             part._2._2(s until part._2._2.rows, ::)
           }
+
           if (part._1 * 2 + 1 < nextNumParts) {
             val qOut = QRUtils.applyQ(yPart, tPart, qPart, transpose=false)
             val nrows = qOut.rows
@@ -91,6 +117,7 @@ class TSQR extends RowPartitionedSolver with Logging with Serializable {
           }
         }
       } else {
+        println("We should go here immediately with 2 partitions ")
         qrRevTree = qrTree(curTreeIdx)._2.join(prevTree).map { part =>
           val yPart = part._2._1._1
           val tPart = part._2._1._2
@@ -102,11 +129,13 @@ class TSQR extends RowPartitionedSolver with Logging with Serializable {
             val s = part._2._2.rows - numRows
             part._2._2(s until part._2._2.rows, ::)
           }
-          (part._1, QRUtils.applyQ(yPart, tPart, qPart, transpose=false))
+          val applyQResult = QRUtils.applyQ(yPart, tPart, qPart, transpose=false)
+          println("After applying a householder reflection " + applyQResult)
+          (part._1, applyQResult)
         }
       }
     }
-
+    println("Right before creation of matrix, qrRevTree has length " + qrRevTree.partitions.size)
     (RowPartitionedMatrix.fromMatrix(qrRevTree.map(x => x._2)), r)
   }
 
