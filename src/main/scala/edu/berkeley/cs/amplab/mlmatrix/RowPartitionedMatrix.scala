@@ -26,7 +26,7 @@ class RowPartitionedMatrix(
   cols: Option[Long] = None) extends DistributedMatrix(rows, cols) with Logging {
 
   // Map from partitionId to RowPartitionInfo
-  // Each RDD partition can have multiple RowPartition
+  // Each RDD partition can have multiple RowPartitionInfo(s)
   @transient var partitionInfo_ : Map[Int, Array[RowPartitionInfo]] = null
 
   override def getDim() = {
@@ -70,7 +70,7 @@ class RowPartitionedMatrix(
       cumulativeSum).map(x => RowPartitionInfo(x._1._1, x._1._2, x._2)).groupBy(x => x.partitionId)
   }
 
-  def getPartitionInfo = {
+  def getPartitionInfo(): Map[Int, Array[RowPartitionInfo]] = {
     if (partitionInfo_ == null) {
       calculatePartitionInfo()
     }

@@ -6,7 +6,7 @@ DATA_DIR="imagenet-linear-solver-data/"
 PARTS=2
 LAMBDA=0.1
 CLASS="CheckQR"
-DATASET="gaussian-16-2"
+DATASET="gaussian-8-1"
 
 export SPARK_MEM
 
@@ -16,5 +16,5 @@ for PARTS in 2
 #for PARTS in 128 256  
 do
   ID=$CLASS-$DATASET-$PARTS-$LAMBDA-`date +"%Y_%m_%d_%H_%M_%S"`
-  ./run-main.sh edu.berkeley.cs.amplab.mlmatrix.$CLASS $SPARK_MASTER $DATA_DIR $PARTS $LAMBDA $DATASET 2>$ID.stderr
+  ./run-main.sh edu.berkeley.cs.amplab.mlmatrix.$CLASS $SPARK_MASTER $DATA_DIR $PARTS $LAMBDA $DATASET 2>$ID.stderr 1>$ID.stdout
 done

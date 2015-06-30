@@ -145,13 +145,15 @@ class TSQR extends RowPartitionedSolver with Logging with Serializable {
         DenseMatrix[Double]) = {
     val qrTreeSeq = new ArrayBuffer[(Int, RDD[(Int, (DenseMatrix[Double], Array[Double], DenseMatrix[Double]))])]
 
-    val matPartInfo = mat.getPartitionInfo
+    val matPartInfo: Map[Int, Array[RowPartitionInfo]] = mat.getPartitionInfo
     val matPartInfoBroadcast = mat.rdd.context.broadcast(matPartInfo)
 
-    var qrTree = mat.rdd.mapPartitionsWithIndex { case (part, iter) =>
+    var qrTree: RDD[(Int, (DenseMatrix[Double], Array[Double], DenseMatrix[Double]))] = mat.rdd.mapPartitionsWithIndex { case (part: Int, iter: Iterator[RowPartition]) =>
       if (matPartInfoBroadcast.value.contains(part) && !iter.isEmpty) {
-        val partBlockIds = matPartInfoBroadcast.value(part).sortBy(x=> x.blockId).map(x => x.blockId)
-        iter.zip(partBlockIds.iterator).map { case (lm, bi) =>
+        val partBlockIds: Array[Int] = matPartInfoBroadcast.value(part).sortBy(x=> x.blockId).map(x => x.blockId)
+        val partBlockIdsIterator: Iterator[Int] = partBlockIds.iterator
+        //Does each RowPartition correspond to one blockId? How can zip handle this?
+        iter.zip(partBlockIds.iterator).map { case (lm: RowPartition, bi: Int) =>
           if (lm.mat.rows < lm.mat.cols) {
             (
               bi,
