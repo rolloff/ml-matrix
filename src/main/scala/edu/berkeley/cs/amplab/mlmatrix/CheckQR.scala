@@ -212,16 +212,15 @@ object CheckQR extends Logging with Serializable {
     println("norm(A) is " + normA)
     println("norm(A-QR)/norm(A) is " + (train-qr).normFrobenius()/normA)
 
-    val qtq_parts = q.mapPartitions(part=>(  ((part).t)*part) )
-    val qtq = qtq_parts.rdd.map(part=>(part.mat)).reduce(_+_)
-    // save qtq to disk
+    val qtq = q.mapPartitions(part=>part.t*part).rdd.map(part=>part.mat).reduce(_+_)
+
 
     println("norm(Q^TQ - I) is " + norm((qtq - DenseMatrix.eye[Double](qtq.rows)).toDenseVector))
 
 
   }
 
-    // Distributed QR
+    // Distributed Solve
     /*
     val result = new TSQR().returnQRResult(train, b)
     val R = result._1
