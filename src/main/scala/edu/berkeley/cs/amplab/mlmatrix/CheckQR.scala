@@ -165,6 +165,8 @@ object CheckQR extends Logging with Serializable {
           trainFilename += "A-Gaussian-10000-10/"
       case "gaussian-16-2" =>
         trainFilename += "A-Gaussian-16-2/"
+      case "gaussian-8-1" =>
+        trainFilename += "A-Gaussian-8-1"
       case _ =>
         logError("Invalid dataset, " + dataset + " should be in {timit, lcs, daisy}")
         logError("Using daisy")
@@ -174,11 +176,12 @@ object CheckQR extends Logging with Serializable {
 
     // Save a random Gaussian matrix
     /*
-    val train = RowPartitionedMatrix.createRandomGaussian(sc, 16, 2, parts, true)
+    val train = RowPartitionedMatrix.createRandomGaussian(sc, 8, 1, parts, true)
     train.rdd.flatMap(part => MatrixUtils.matrixToRowArray(part.mat)).map {
       x => x.toArray.mkString(",")
-    }.saveAsTextFile(directory + "A-Gaussian-16-2")
+    }.saveAsTextFile(directory + "A-Gaussian-8-1")
     */
+
 
 
 
@@ -221,7 +224,7 @@ object CheckQR extends Logging with Serializable {
 
     println("norm(Q^TQ - I) is " + norm((qtq - DenseMatrix.eye[Double](qtq.rows)).toDenseVector))
 
-
+    
   }
 
     // Distributed QR

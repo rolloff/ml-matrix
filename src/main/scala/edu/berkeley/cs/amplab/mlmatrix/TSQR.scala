@@ -87,6 +87,7 @@ class TSQR extends RowPartitionedSolver with Logging with Serializable {
     }
 
     var prevTree = qrRevTree
+    println("The size of prevTree is "+ prevTree.partitions.size)
 
     while (curTreeIdx > 0) {
       curTreeIdx = curTreeIdx - 1
