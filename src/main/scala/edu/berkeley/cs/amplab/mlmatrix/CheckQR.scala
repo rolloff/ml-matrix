@@ -183,8 +183,6 @@ object CheckQR extends Logging with Serializable {
     */
 
 
-
-
     // load matrix RDDs, removing repartition
     val trainRDD = Utils.loadMatrixFromFile(sc, trainFilename, parts).cache()
     //val bRDD = Utils.loadMatrixFromFile(sc, bFilename, parts)
@@ -205,10 +203,6 @@ object CheckQR extends Logging with Serializable {
 
     val (q, r) = new TSQR().qrQR(train)
 
-    println(" /////////////FINAL RESULTS///////////////////////////")
-    //println("The final A is " + (train.collect()))
-    //println("The final Q is " + (q.collect()))
-    println("The final R is " + (r))
     //csvwrite(new File("A-"+dataset + "-parts-" + parts), (train.collect()))
     //csvwrite(new File("Q-"+dataset + "-parts-" + parts),  (q.collect()))
     //csvwrite(new File("R-"+dataset + "-parts-" + parts), (r))
@@ -224,7 +218,7 @@ object CheckQR extends Logging with Serializable {
 
     println("norm(Q^TQ - I) is " + norm((qtq - DenseMatrix.eye[Double](qtq.rows)).toDenseVector))
 
-    
+
   }
 
     // Distributed QR
