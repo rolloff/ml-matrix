@@ -175,9 +175,9 @@ class TSQR extends RowPartitionedSolver with Logging with Serializable {
     qrTreeSeq.append((numParts, qrTree))
 
     while (numParts > 1) {
-      qrTree = qrTree.map(x => ((x._1/2.0).toInt, x._2)).reduceByKey(
+      qrTree = qrTree.map(x => ((x._1/2.0).toInt, (x._1, x._2))).reduceByKey(
         numPartitions=math.ceil(numParts/2.0).toInt,
-        func=reduceYTR(_, _))
+        func=reduceYTR(_, _)).map(x => (x._1, x._2._2))
       numParts = math.ceil(numParts/2.0).toInt
       qrTreeSeq.append((numParts, qrTree))
     }
@@ -186,10 +186,15 @@ class TSQR extends RowPartitionedSolver with Logging with Serializable {
   }
 
   private def reduceYTR(
-      a: (DenseMatrix[Double], Array[Double], DenseMatrix[Double]),
-      b: (DenseMatrix[Double], Array[Double], DenseMatrix[Double]))
-    : (DenseMatrix[Double], Array[Double], DenseMatrix[Double]) = {
-    QRUtils.qrYTR(DenseMatrix.vertcat(a._3, b._3))
+      a: (Int, (DenseMatrix[Double], Array[Double], DenseMatrix[Double])),
+      b: (Int, (DenseMatrix[Double], Array[Double], DenseMatrix[Double])))
+    : (Int, (DenseMatrix[Double], Array[Double], DenseMatrix[Double])) = {
+    // Stack the lower id above the higher id
+    if (a._1 < b._1) {
+      (a._1, QRUtils.qrYTR(DenseMatrix.vertcat(a._2._3, b._2._3)))
+    } else {
+      (b._1, QRUtils.qrYTR(DenseMatrix.vertcat(b._2._3, a._2._3)))
+    }
   }
 
   // From http://math.stackexchange.com/questions/299481/qr-factorization-for-ridge-regression
