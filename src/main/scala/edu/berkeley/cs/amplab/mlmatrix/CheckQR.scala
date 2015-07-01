@@ -209,10 +209,10 @@ object CheckQR extends Logging with Serializable {
     //csvwrite(new File("Q-"+dataset + "-parts-" + parts),  (q.collect()))
     //csvwrite(new File("R-"+dataset + "-parts-" + parts), (r))
 
-    //val qr = q.mapPartitions(part => part*r)
-    //val normA = train.normFrobenius()
-    //println("norm(A) is " + normA)
-    //println("norm(A-QR)/norm(A) is " + (train-qr).normFrobenius()/normA)
+    val qr = q.mapPartitions(part => part*r)
+    val normA = train.normFrobenius()
+    println("norm(A) is " + normA)
+    println("norm(A-QR)/norm(A) is " + (train-qr).normFrobenius()/normA)
 
     val qtq = q.mapPartitions(part=>part.t*part).rdd.map(part=>part.mat).reduce(_+_)
 
