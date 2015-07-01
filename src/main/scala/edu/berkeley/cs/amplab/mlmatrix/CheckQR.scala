@@ -175,14 +175,14 @@ object CheckQR extends Logging with Serializable {
     }
 
     // Save a random Gaussian matrix
-    /*
-    val train = RowPartitionedMatrix.createRandomGaussian(sc, 8, 1, parts, true)
+
+    val train = RowPartitionedMatrix.createRandomGaussian(sc, 1281167, 4001, parts, true)
     train.rdd.flatMap(part => MatrixUtils.matrixToRowArray(part.mat)).map {
       x => x.toArray.mkString(",")
-    }.saveAsTextFile(directory + "A-Gaussian-8-1")
-    */
+    }.saveAsTextFile(directory + "A-Gaussian-1281167-4001")
 
 
+    /*
     // load matrix RDDs, removing repartition
     val trainRDD = Utils.loadMatrixFromFile(sc, trainFilename, parts).cache()
     //val bRDD = Utils.loadMatrixFromFile(sc, bFilename, parts)
@@ -216,7 +216,7 @@ object CheckQR extends Logging with Serializable {
 
 
     println("norm(Q^TQ - I) is " + norm((qtq - DenseMatrix.eye[Double](qtq.rows)).toDenseVector))
-
+    */
 
   }
 
