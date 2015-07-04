@@ -107,45 +107,14 @@ object CheckQR extends Logging with Serializable {
     */
 
     val (q, r) = new TSQR().qrQR(train)
-
-    //csvwrite(new File("A-"+dataset + "-parts-" + parts), (train.collect()))
-    //csvwrite(new File("Q-"+dataset + "-parts-" + parts),  (q.collect()))
-    //csvwrite(new File("R-"+dataset + "-parts-" + parts), (r))
-
     val qr = q.mapPartitions(part => part*r)
     val normA = train.normFrobenius()
     println("norm(A) is " + normA)
     println("norm(A-QR)/norm(A) is " + (train-qr).normFrobenius()/normA)
-
     val qtq = q.mapPartitions(part=>part.t*part).rdd.map(part=>part.mat).reduce(_+_)
-
-
     println("norm(Q^TQ - I) is " + norm((qtq - DenseMatrix.eye[Double](qtq.rows)).toDenseVector))
 
 
   }
-
-    // Distributed Solve
-    /*
-    val result = new TSQR().returnQRResult(train, b)
-    val R = result._1
-    csvwrite(new File("DistributedR-"+ parts ),  R)
-    val QTB = result._2
-    csvwrite(new File("DistributedQTB-" +parts), QTB)
-    val RStacked = DenseMatrix.vertcat(R, DenseMatrix.eye[Double](R.cols):*math.sqrt(lambda))
-    val QTBStacked = DenseMatrix.vertcat(QTB, new DenseMatrix[Double](R.cols, QTB.cols))
-    val XQR = RStacked \ QTBStacked
-    csvwrite(new File("DistributedX-"+ parts), XQR)
-    val distributedQRResidual = RStacked*XQR - QTBStacked
-
-    csvwrite(new File("DistributedResidual-"+ parts),  distributedQRResidual)
-    val normDistributedQRResidual = Utils.computeResidualNormWithL2(train, b, XQR, lambda)
-
-
-    println("Distributed Norm of Rx-QTB" + norm(distributedQRResidual.toDenseVector))
-    println("Distributed Norm of Ax-b " + normDistributedQRResidual)
-
-    */
-
 
 }
