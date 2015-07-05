@@ -59,8 +59,11 @@ class TSQR extends RowPartitionedSolver with Logging with Serializable {
         val yPart: DenseMatrix[Double] = p._2._1
         val tPart: Array[Double] = p._2._2
 
-        println("yPart is " + yPart)
+        println("printing ypart ")
+        csvwrite(new File("yPart-treeIdx-"+ curTreeIdx +"-id-" + id), yPart)
+
         println("tPart is " + tPart.mkString(" "))
+        csvwrite(new File("tPart-treeIdx-" + curTreeIdx + "-id-" + id), DenseMatrix(tPart))
         (id, yPart, tPart)
       }.collect()
       println("/////////info length is " + info.length)
@@ -69,6 +72,7 @@ class TSQR extends RowPartitionedSolver with Logging with Serializable {
 
     var curTreeIdx = qrTree.size - 1
 
+    println("About to start construicting Q")
     println("We begin work on constructing q by starting with index " + curTreeIdx)
     println("Inside the sequence we start with int " + qrTree(curTreeIdx)._1)
     // Now construct Q by going up the tree
@@ -80,7 +84,7 @@ class TSQR extends RowPartitionedSolver with Logging with Serializable {
         qIn(i, i) =  1.0
       }
       val applyQResult = QRUtils.applyQ(yPart, tPart, qIn, transpose=false)
-      println("After applying a householder reflection " + applyQResult)
+      //println("After applying a householder reflection " + applyQResult)
       (part._1, QRUtils.applyQ(yPart, tPart, qIn, transpose=false))
     }.flatMap { x =>
       val nrows = x._2.rows
@@ -133,7 +137,7 @@ class TSQR extends RowPartitionedSolver with Logging with Serializable {
             part._2._2(s until part._2._2.rows, ::)
           }
           val applyQResult = QRUtils.applyQ(yPart, tPart, qPart, transpose=false)
-          println("After applying a householder reflection " + applyQResult)
+          //println("After applying a householder reflection " + applyQResult)
           (part._1, applyQResult)
         }
       }
