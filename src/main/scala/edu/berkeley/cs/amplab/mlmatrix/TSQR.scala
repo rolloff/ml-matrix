@@ -59,10 +59,11 @@ class TSQR extends RowPartitionedSolver with Logging with Serializable {
         val yPart: DenseMatrix[Double] = p._2._1
         val tPart: Array[Double] = p._2._2
 
-        println("printing ypart ")
+        println("printing yPart ")
         csvwrite(new File("yPart-treeIdx-"+ curTreeIdx +"-id-" + id), yPart)
 
-        println("tPart is " + tPart.mkString(" "))
+        //println("tPart is " + tPart.mkString(" "))
+        println("printing tPart")
         csvwrite(new File("tPart-treeIdx-" + curTreeIdx + "-id-" + id), DenseMatrix(tPart))
         (id, yPart, tPart)
       }.collect()
