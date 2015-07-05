@@ -70,6 +70,8 @@ object CheckQR extends Logging with Serializable {
         bFilename += "timit-fft-null-labels/"
       case "gaussian-100-10" =>
         trainFilename += "A-Gaussian-100-10/"
+      case "gaussian-500-100" =>
+        trainFilename += "A-Gaussian-500-100/"
       case "gaussian-1000-10" =>
         trainFilename += "A-Gaussian-1000-10/"
       case "gaussian-10000-10" =>
@@ -87,24 +89,25 @@ object CheckQR extends Logging with Serializable {
         bFilename += "daisy-null-labels/"
     }
 
-
+    /*
+    //Create random Gaussian matrix
     val train = RowPartitionedMatrix.createRandomGaussian(sc, numRows, numCols, parts, true).cache()
     train.rdd.count
 
-    /*
-    Code to save random Gaussian matrices
+
+    //Save matrix
     train.rdd.flatMap(part => MatrixUtils.matrixToRowArray(part.mat)).map {
       x => x.toArray.mkString(",")
-    }.saveAsTextFile(directory + "A-Gaussian-1281167-4001")
+    }.saveAsTextFile(directory + "A-Gaussian-500-100")
     */
 
-    /*
+
     val trainRDD = Utils.loadMatrixFromFile(sc, trainFilename, parts).cache()
     trainRDD.count
     var train = RowPartitionedMatrix.fromArray(trainRDD).cache()
     train.rdd.count
     trainRDD.unpersist()
-    */
+
 
     val (q, r) = new TSQR().qrQR(train)
     val qr = q.mapPartitions(part => part*r)
@@ -113,6 +116,7 @@ object CheckQR extends Logging with Serializable {
     println("norm(A-QR)/norm(A) is " + (train-qr).normFrobenius()/normA)
     val qtq = q.mapPartitions(part=>part.t*part).rdd.map(part=>part.mat).reduce(_+_)
     println("norm(Q^TQ - I) is " + norm((qtq - DenseMatrix.eye[Double](qtq.rows)).toDenseVector))
+    
 
 
   }
