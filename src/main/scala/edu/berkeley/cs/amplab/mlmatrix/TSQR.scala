@@ -78,7 +78,7 @@ class TSQR extends RowPartitionedSolver with Logging with Serializable {
       val treeLevel: Int = qrTree(lastIdx)._1
       val partId: Int = part._1
       println("LastIdx is " + lastIdx)
-      println("About to write out Q with treeLevel " + treeLevel + "and partId " + partId)
+      println("About to write out Q with treeLevel " + treeLevel + " and partId " + partId)
       csvwrite(new File("Q-" + treeLevel + "-" + partId), applyQResult)
 
       (partId, applyQResult)
@@ -87,6 +87,7 @@ class TSQR extends RowPartitionedSolver with Logging with Serializable {
       Iterator((x._1 * 2, x._2),
                (x._1 * 2 + 1, x._2))
     }
+    qrRevTree.count()
 
     var prevTree: RDD[(Int, DenseMatrix[Double])] = qrRevTree
     prevTree.count()
