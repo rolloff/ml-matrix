@@ -89,15 +89,21 @@ class TSQR extends RowPartitionedSolver with Logging with Serializable {
     }
 
     var prevTree: RDD[(Int, DenseMatrix[Double])] = qrRevTree
+    prevTree.count()
     //println("The size of prevTree is "+ prevTree.partitions.size)
 
+
     while (curTreeIdx > 0) {
-      curTreeIdx = curTreeIdx - 1
+      val whileLoopTreeIdx = curTreeIdx - 1
+      curTreeIdx = whileLoopTreeIdx
+      val treeLevel: Int = qrTree(whileLoopTreeIdx)._1
+      val whileLoopPrevTree = qrRevTree
       prevTree = qrRevTree
-      if (curTreeIdx > 0) {
+
+      if (whileLoopTreeIdx > 0) {
         println("With two partitions we should not end up here")
-        val nextNumParts = qrTree(curTreeIdx - 1)._1
-        qrRevTree = qrTree(curTreeIdx)._2.join(prevTree).flatMap { part =>
+        val nextNumParts = qrTree(whileLoopTreeIdx - 1)._1
+        qrRevTree = qrTree(whileLoopTreeIdx)._2.join(whileLoopPrevTree).flatMap { part =>
           val y = part._2._1._1
           val t = part._2._1._2
 
@@ -119,9 +125,10 @@ class TSQR extends RowPartitionedSolver with Logging with Serializable {
             Iterator((part._1 * 2, qPart))
           }
         }
+        qrRevTree.count()
       } else {
         println("We should go here immediately with 2 partitions ")
-        qrRevTree = qrTree(curTreeIdx)._2.join(prevTree).map { part =>
+        qrRevTree = qrTree(whileLoopTreeIdx)._2.join(whileLoopPrevTree).map { part =>
           val y = part._2._1._1
           val t = part._2._1._2
           val qPart = if (part._1 % 2 == 0) {
@@ -132,12 +139,12 @@ class TSQR extends RowPartitionedSolver with Logging with Serializable {
             val s = part._2._2.rows - numRows
             part._2._2(s until part._2._2.rows, ::)
           }
-          val treeLevel: Int = qrTree(curTreeIdx)._1
           val partId: Int = part._1
           val applyQResult = QRUtils.applyQ(y, t, qPart, transpose=false)
           csvwrite(new File("Q-" + treeLevel + "-" + partId), applyQResult)
           (partId, applyQResult)
         }
+        qrRevTree.count()
       }
     }
     (RowPartitionedMatrix.fromMatrix(qrRevTree.map(x => x._2)), r)
