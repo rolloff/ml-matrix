@@ -150,7 +150,7 @@ class TSQR extends RowPartitionedSolver with Logging with Serializable {
           csvwrite(new File("Q-" + treeLevel + "-" + partId ), applyQResult)
           (partId, applyQResult)
         }
-        qrRevTree.cache()
+        //qrRevTree.cache()
         println("Final size of qrRevTree is " + qrRevTree.count())
       }
     }
