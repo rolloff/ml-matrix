@@ -3,6 +3,7 @@ package edu.berkeley.cs.amplab.mlmatrix
 import java.io.File
 import java.util.concurrent.ThreadLocalRandom
 import scala.collection.mutable.ArrayBuffer
+import scala.util.Random
 
 import breeze.linalg._
 
@@ -130,8 +131,8 @@ class TSQR extends RowPartitionedSolver with Logging with Serializable {
         qrRevTree.count()
       } else {
         println("We should go here immediately with 2 partitions ")
-        println("whileLoopPrevTree has size " + whileLoopPrevTree.count())
-        println("qrTree(whileLoopTreeIdx)._2 has size" + qrTree(whileLoopTreeIdx)._2.count())
+        println("whileLoopPrevTree has size " + whileLoopPrevTree.count() + " partitions: " + whileLoopPrevTree.partitions.size)
+        println("qrTree(whileLoopTreeIdx)._2 has size " + qrTree(whileLoopTreeIdx)._2.count() + " partitions: " + qrTree(whileLoopTreeIdx)._2.partitions.size)
         qrRevTree = qrTree(whileLoopTreeIdx)._2.join(whileLoopPrevTree).map { part =>
           val partId: Int = part._1
           println("Inside the join with partId " + partId)
@@ -146,10 +147,11 @@ class TSQR extends RowPartitionedSolver with Logging with Serializable {
             part._2._2(s until part._2._2.rows, ::)
           }
           val applyQResult = QRUtils.applyQ(y, t, qPart, transpose=false)
-          csvwrite(new File("Q-" + treeLevel + "-" + partId), applyQResult)
+          csvwrite(new File("Q-" + treeLevel + "-" + partId ), applyQResult)
           (partId, applyQResult)
         }
-        qrRevTree.count()
+        qrRevTree.cache()
+        println("Final size of qrRevTree is " + qrRevTree.count())
       }
     }
     (RowPartitionedMatrix.fromMatrix(qrRevTree.map(x => x._2)), r)
