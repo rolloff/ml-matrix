@@ -110,13 +110,15 @@ object CheckQR extends Logging with Serializable {
 
 
     val (q, r) = new TSQR().qrQR(train)
+    csvwrite( new File("Q"), q.collect())
+    csvwrite( new File("R"), r)
     val qr = q.mapPartitions(part => part*r)
     val normA = train.normFrobenius()
     println("norm(A) is " + normA)
     println("norm(A-QR)/norm(A) is " + (train-qr).normFrobenius()/normA)
     val qtq = q.mapPartitions(part=>part.t*part).rdd.map(part=>part.mat).reduce(_+_)
     println("norm(Q^TQ - I) is " + norm((qtq - DenseMatrix.eye[Double](qtq.rows)).toDenseVector))
-    
+
 
 
   }
