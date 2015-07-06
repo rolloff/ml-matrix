@@ -53,30 +53,32 @@ class TSQR extends RowPartitionedSolver with Logging with Serializable {
       println("treeLevel is " + treeLevel + " with tree RDD of size " + treeRDD.partitions.size)
       val info = treeRDD.map { p =>
         val partId: Int = p._1
-        val yPart: DenseMatrix[Double] = p._2._1
-        val tPart: Array[Double] = p._2._2
-        csvwrite(new File("yPart-"+ treeLevel +"-" + partId), yPart)
-        csvwrite(new File("tPart-" + treeLevel + "-" + partId), DenseMatrix(tPart))
-        (partId, yPart, tPart)
+        val y: DenseMatrix[Double] = p._2._1
+        val t: Array[Double] = p._2._2
+        csvwrite(new File("y-"+ treeLevel +"-" + partId), y)
+        csvwrite(new File("t-" + treeLevel + "-" + partId), DenseMatrix(t))
+        (partId, y, t)
       }.collect()
     }
 
 
     var curTreeIdx = qrTree.size - 1
-
-    println("About to start constructing Q")
+    val lastIdx = qrTree.size - 1
+    println("About to start constructing Q with curTreeIdx as " + lastIdx + "and a qrTree of size " + qrTree.size)
 
     // Now construct Q by going up the tree
-    var qrRevTree: RDD[(Int, DenseMatrix[Double])] = qrTree(curTreeIdx)._2.map { part =>
-      val yPart = part._2._1
-      val tPart = part._2._2
-      val qIn = new DenseMatrix[Double](yPart.rows, yPart.cols)
-      for (i <- 0 until yPart.cols) {
+    var qrRevTree: RDD[(Int, DenseMatrix[Double])] = qrTree(lastIdx)._2.map { part =>
+      val y = part._2._1
+      val t = part._2._2
+      val qIn = new DenseMatrix[Double](y.rows, y.cols)
+      for (i <- 0 until y.cols) {
         qIn(i, i) =  1.0
       }
-      val applyQResult = QRUtils.applyQ(yPart, tPart, qIn, transpose=false)
-      val treeLevel: Int = qrTree(curTreeIdx)._1
+      val applyQResult = QRUtils.applyQ(y, t, qIn, transpose=false)
+      val treeLevel: Int = qrTree(lastIdx)._1
       val partId: Int = part._1
+      println("LastIdx is " + lastIdx)
+      println("About to write out Q with treeLevel " + treeLevel + "and partId " + partId)
       csvwrite(new File("Q-" + treeLevel + "-" + partId), applyQResult)
 
       (partId, applyQResult)
@@ -96,20 +98,20 @@ class TSQR extends RowPartitionedSolver with Logging with Serializable {
         println("With two partitions we should not end up here")
         val nextNumParts = qrTree(curTreeIdx - 1)._1
         qrRevTree = qrTree(curTreeIdx)._2.join(prevTree).flatMap { part =>
-          val yPart = part._2._1._1
-          val tPart = part._2._1._2
+          val y = part._2._1._1
+          val t = part._2._1._2
 
           val qPart = if (part._1 % 2 == 0) {
-            val e = math.min(yPart.rows, yPart.cols)
+            val e = math.min(y.rows, y.cols)
             part._2._2(0 until e, ::)
           } else {
-            val numRows = math.min(yPart.rows, yPart.cols)
+            val numRows = math.min(y.rows, y.cols)
             val s = part._2._2.rows - numRows
             part._2._2(s until part._2._2.rows, ::)
           }
 
           if (part._1 * 2 + 1 < nextNumParts) {
-            val qOut = QRUtils.applyQ(yPart, tPart, qPart, transpose=false)
+            val qOut = QRUtils.applyQ(y, t, qPart, transpose=false)
             val nrows = qOut.rows
             Iterator((part._1 * 2, qOut),
                      (part._1 * 2 + 1, qOut))
@@ -120,19 +122,19 @@ class TSQR extends RowPartitionedSolver with Logging with Serializable {
       } else {
         println("We should go here immediately with 2 partitions ")
         qrRevTree = qrTree(curTreeIdx)._2.join(prevTree).map { part =>
-          val yPart = part._2._1._1
-          val tPart = part._2._1._2
+          val y = part._2._1._1
+          val t = part._2._1._2
           val qPart = if (part._1 % 2 == 0) {
-            val e = math.min(yPart.rows, yPart.cols)
+            val e = math.min(y.rows, y.cols)
             part._2._2(0 until e, ::)
           } else {
-            val numRows = math.min(yPart.rows, yPart.cols)
+            val numRows = math.min(y.rows, y.cols)
             val s = part._2._2.rows - numRows
             part._2._2(s until part._2._2.rows, ::)
           }
           val treeLevel: Int = qrTree(curTreeIdx)._1
           val partId: Int = part._1
-          val applyQResult = QRUtils.applyQ(yPart, tPart, qPart, transpose=false)
+          val applyQResult = QRUtils.applyQ(y, t, qPart, transpose=false)
           csvwrite(new File("Q-" + treeLevel + "-" + partId), applyQResult)
           (partId, applyQResult)
         }
