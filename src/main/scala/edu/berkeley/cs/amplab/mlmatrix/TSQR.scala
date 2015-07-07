@@ -94,13 +94,15 @@ class TSQR extends RowPartitionedSolver with Logging with Serializable {
     prevTree.count()
     //println("The size of prevTree is "+ prevTree.partitions.size)
 
+    val whileLoopPrevTree = qrRevTree
+    val whileLoopTreeIdx = curTreeIdx -1
     while (curTreeIdx > 0)
     {
-      val whileLoopTreeIdx = curTreeIdx - 1
+      //val whileLoopTreeIdx = curTreeIdx - 1
       curTreeIdx = whileLoopTreeIdx
       val treeLevel: Int = qrTree(whileLoopTreeIdx)._1
       println("treeLevel is " + treeLevel)
-      val whileLoopPrevTree = qrRevTree
+      //val whileLoopPrevTree = qrRevTree
       prevTree = qrRevTree
 
       if (whileLoopTreeIdx > 0) {
@@ -147,7 +149,7 @@ class TSQR extends RowPartitionedSolver with Logging with Serializable {
             part._2._2(s until part._2._2.rows, ::)
           }
           val applyQResult = QRUtils.applyQ(y, t, qPart, transpose=false)
-          csvwrite(new File("Q-" + treeLevel + "-" + partId ), applyQResult)
+          csvwrite(new File("Q-" + treeLevel + "-" + partId + "-" + System.currentTimeMillis / 1000), applyQResult)
           (partId, applyQResult)
         }
         //qrRevTree.cache()
