@@ -157,9 +157,11 @@ class TSQR extends RowPartitionedSolver with Logging with Serializable {
         //qrRevTree.cache()
         //println("Final size of qrRevTree is " + qrRevTree.count())
       }
-      qrRevTree.cache()
-      qrRevTree.count()
+      //qrRevTree.cache()
+      //qrRevTree.count()
     }
+    qrRevTree.cache()
+    qrRevTree.count()
 
     (RowPartitionedMatrix.fromMatrix(qrRevTree.map(x => x._2)), r)
   }
