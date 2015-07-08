@@ -89,30 +89,27 @@ object CheckQR extends Logging with Serializable {
         bFilename += "daisy-null-labels/"
     }
 
-
+    /* 
     //Create random Gaussian matrix
     val train = RowPartitionedMatrix.createRandomGaussian(sc, numRows, numCols, parts, true).cache()
     train.rdd.count
-
-    /*
+    
     //Save matrix
     train.rdd.flatMap(part => MatrixUtils.matrixToRowArray(part.mat)).map {
       x => x.toArray.mkString(",")
     }.saveAsTextFile(directory + "A-Gaussian-500-100")
-
-
+    */
 
     val trainRDD = Utils.loadMatrixFromFile(sc, trainFilename, parts).cache()
     trainRDD.count
     var train = RowPartitionedMatrix.fromArray(trainRDD).cache()
     train.rdd.count
     trainRDD.unpersist()
-    */
-
+    
 
     val (q, r) = new TSQR().qrQR(train)
-    q.cache()
-    q.rdd.count()
+    //q.cache()
+   // q.rdd.count()
     //csvwrite(new File("A"), train.collect())
     //csvwrite( new File("Q"), q.collect())
     //csvwrite( new File("R"), r)
@@ -122,9 +119,5 @@ object CheckQR extends Logging with Serializable {
     println("norm(A-QR)/norm(A) is " + (train-qr).normFrobenius()/normA)
     val qtq = q.mapPartitions(part=>part.t*part).rdd.map(part=>part.mat).reduce(_+_)
     println("norm(Q^TQ - I) is " + norm((qtq - DenseMatrix.eye[Double](qtq.rows)).toDenseVector))
-
-
-
   }
-
 }

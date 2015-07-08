@@ -45,7 +45,11 @@ class TSQR extends RowPartitionedSolver with Logging with Serializable {
 
   def qrQR(mat: RowPartitionedMatrix): (RowPartitionedMatrix, DenseMatrix[Double]) = {
     // First step run TSQR, get YTR tree
-    val (qrTree, r) = qrYTR(mat)
+    val (qrTreeSeq, r) = qrYTR(mat)
+
+    val sc = mat.rdd.context
+    // TODO: Here after we save out the Y and T parts, verify with MATLAB if the values match.
+    // NOTE(becca): they do ! This means qrTree is fine. Our reconstruction is wrong.
 
     /*
     //Debug qrTree. qrTree is a Seq[(Int, RDD[(Int, (DenseMatrix[Double], Array[Double], DenseMatrix[Double]))])]
@@ -64,13 +68,18 @@ class TSQR extends RowPartitionedSolver with Logging with Serializable {
     }
     */
 
+    // What we want to do is start from the end of qrTree and construct a reverse tree (qrRevTree)
+    // Each level of the reverse tree is constructed by joining the corresponding level of 
+    // qrTree with the next level of qrRevTree. 
+    // 
+    // i.e Level 2 of qrRevTree will be the result of joining level 2 of qrTree and level 1 of qrRevTree.
 
-    var curTreeIdx = qrTree.size - 1
-    val lastIdx = qrTree.size - 1
-    //println("About to start constructing Q with curTreeIdx as " + lastIdx + "and a qrTree of size " + qrTree.size)
+    val lastIdx = qrTreeSeq.size - 1
+
+    val qrRevTreeSeq = new Array[RDD[(Int, DenseMatrix[Double])]](qrTreeSeq.size)
 
     // Now construct Q by going up the tree
-    var qrRevTree: RDD[(Int, DenseMatrix[Double])] = qrTree(lastIdx)._2.map { part =>
+    var qrRevTree = qrTreeSeq(lastIdx)._2.map { part =>
       val y = part._2._1
       val t = part._2._2
       val qIn = new DenseMatrix[Double](y.rows, y.cols)
@@ -79,41 +88,36 @@ class TSQR extends RowPartitionedSolver with Logging with Serializable {
       }
       val applyQResult = QRUtils.applyQ(y, t, qIn, transpose=false)
       //val treeLevel: Int = qrTree(lastIdx)._1
-      val partId: Int = part._1
-      //println("LastIdx is " + lastIdx)
-      //println("About to write out Q with treeLevel " + treeLevel + " and partId " + partId)
+      val partId = part._1
+      assert(partId == 0)
       //csvwrite(new File("Q-" + treeLevel + "-" + partId), applyQResult)
-
+      //println("Norm of qIn for treeIdx-" + lastIdx + "-partId-" + partId + " is " + norm(qIn.toDenseVector))
+      //println("Norm of y for treeIdx-" + lastIdx + "-partId-" + part._1 + " is " + norm(y.toDenseVector))
+      //println("Norm of t for treeIdx-" + lastIdx + "-partId-" + part._1 + " is " + norm(DenseVector(t)))
+      //println("Norm of applyQResult for treeIdx-" + lastIdx + "-partId-" + partId + " is " + norm(applyQResult.toDenseVector))
       (partId, applyQResult)
     }.flatMap { x =>
-      val nrows = x._2.rows
       Iterator((x._1 * 2, x._2),
                (x._1 * 2 + 1, x._2))
     }
-    //qrRevTree.cache()
-    //qrRevTree.count()
 
-    //val prevTree: RDD[(Int, DenseMatrix[Double])] = qrRevTree
-    //prevTree.count()
-    //println("The size of prevTree is "+ prevTree.partitions.size)
+    // Right now qrRevTree has 1 partition with 2 rows in it from the last level.
+    qrRevTreeSeq(lastIdx) = qrRevTree
 
+    var curTreeIdx = qrTreeSeq.size - 1
+    while (curTreeIdx > 0) {
+      curTreeIdx = curTreeIdx - 1
 
-    while (curTreeIdx > 0)
-    {
-      val whileLoopTreeIdx = curTreeIdx - 1
-      curTreeIdx = whileLoopTreeIdx
-      //val treeLevel: Int = qrTree(whileLoopTreeIdx)._1
-      //println("treeLevel is " + treeLevel)
-      val whileLoopPrevTree = qrRevTree
-      //prevTree = qrRevTree
-
-      if (whileLoopTreeIdx > 0) {
+      if (curTreeIdx > 0) {
         //println("With two partitions we should not end up here")
-        val nextNumParts = qrTree(whileLoopTreeIdx - 1)._1
-        qrRevTree = qrTree(whileLoopTreeIdx)._2.join(whileLoopPrevTree).flatMap { part =>
+        val nextNumPartsBC = sc.broadcast(qrTreeSeq(curTreeIdx - 1)._1)
+
+        qrRevTree = qrTreeSeq(curTreeIdx)._2.join(qrRevTreeSeq(curTreeIdx + 1)).flatMap { part =>
           val y = part._2._1._1
           val t = part._2._1._2
 
+          // We need to get the first half of Q if this is a even partitionId
+          // or the last half of Q if this is a odd partitionId
           val qPart = if (part._1 % 2 == 0) {
             val e = math.min(y.rows, y.cols)
             part._2._2(0 until e, ::)
@@ -123,7 +127,10 @@ class TSQR extends RowPartitionedSolver with Logging with Serializable {
             part._2._2(s until part._2._2.rows, ::)
           }
 
-          if (part._1 * 2 + 1 < nextNumParts) {
+          // The reason this is fine is because broadcast variables are captured
+          // when they are created. See SPARK-729
+          //println("In partId " + part._1 + " got nextNumParts as " + nextNumPartsBC.value)  
+          if (part._1 * 2 + 1 < nextNumPartsBC.value) {
             val qOut = QRUtils.applyQ(y, t, qPart, transpose=false)
             val nrows = qOut.rows
             Iterator((part._1 * 2, qOut),
@@ -132,14 +139,8 @@ class TSQR extends RowPartitionedSolver with Logging with Serializable {
             Iterator((part._1 * 2, qPart))
           }
         }
-        //qrRevTree.count()
       } else {
-        //println("We should go here immediately with 2 partitions ")
-        //println("whileLoopPrevTree has size " + whileLoopPrevTree.count() + " partitions: " + whileLoopPrevTree.partitions.size)
-        //println("qrTree(whileLoopTreeIdx)._2 has size " + qrTree(whileLoopTreeIdx)._2.count() + " partitions: " + qrTree(whileLoopTreeIdx)._2.partitions.size)
-        qrRevTree = qrTree(whileLoopTreeIdx)._2.join(whileLoopPrevTree).map { part =>
-          val partId: Int = part._1
-          //println("Inside the join with partId " + partId)
+        qrRevTree = qrTreeSeq(curTreeIdx)._2.join(qrRevTreeSeq(curTreeIdx + 1)).map { part =>
           val y = part._2._1._1
           val t = part._2._1._2
           val qPart = if (part._1 % 2 == 0) {
@@ -151,17 +152,17 @@ class TSQR extends RowPartitionedSolver with Logging with Serializable {
             part._2._2(s until part._2._2.rows, ::)
           }
           val applyQResult = QRUtils.applyQ(y, t, qPart, transpose=false)
+          //println("Norm of qIn for treeIdx-" + curTreeIdx + "-partId-" + part._1 + " is " + norm(qPart.toDenseVector))
+          //println("Norm of y for treeIdx-" + curTreeIdx + "-partId-" + part._1 + " is " + norm(y.toDenseVector))
+          //println("Norm of t for treeIdx-" + curTreeIdx + "-partId-" + part._1 + " is " + norm(DenseVector(t)))
+          //println("Norm of applyQResult for treeIdx-" + curTreeIdx + "-partId-" + part._1 + " is " + norm(applyQResult.toDenseVector))
           //csvwrite(new File("Q-" + treeLevel + "-" + partId + "-" + System.currentTimeMillis / 1000), applyQResult)
-          (partId, applyQResult)
+          (part._1, applyQResult)
         }
-        //qrRevTree.cache()
         //println("Final size of qrRevTree is " + qrRevTree.count())
       }
-      //qrRevTree.cache()
-      //qrRevTree.count()
+      qrRevTreeSeq(curTreeIdx) = qrRevTree
     }
-    //qrRevTree.cache()
-    //qrRevTree.count()
 
     (RowPartitionedMatrix.fromMatrix(qrRevTree.map(x => x._2)), r)
   }
@@ -174,11 +175,12 @@ class TSQR extends RowPartitionedSolver with Logging with Serializable {
     val matPartInfo: Map[Int, Array[RowPartitionInfo]] = mat.getPartitionInfo
     val matPartInfoBroadcast = mat.rdd.context.broadcast(matPartInfo)
 
-    var qrTree: RDD[(Int, (DenseMatrix[Double], Array[Double], DenseMatrix[Double]))] = mat.rdd.mapPartitionsWithIndex { case (part: Int, iter: Iterator[RowPartition]) =>
+    // Create a tree of YTR values. The first of the tree operates on the input matrix `mat`. 
+    var qrTree = mat.rdd.mapPartitionsWithIndex { case (part: Int, iter: Iterator[RowPartition]) =>
       if (matPartInfoBroadcast.value.contains(part) && !iter.isEmpty) {
         val partBlockIds: Array[Int] = matPartInfoBroadcast.value(part).sortBy(x=> x.blockId).map(x => x.blockId)
         val partBlockIdsIterator: Iterator[Int] = partBlockIds.iterator
-        //Does each RowPartition correspond to one blockId? How can zip handle this?
+        // Zip blocks in this partition with their ids 
         iter.zip(partBlockIds.iterator).map { case (lm: RowPartition, bi: Int) =>
           if (lm.mat.rows < lm.mat.cols) {
             (
@@ -198,16 +200,24 @@ class TSQR extends RowPartitionedSolver with Logging with Serializable {
     }
 
     var numParts = matPartInfo.flatMap(x => x._2.map(y => y.blockId)).size
+
+    // Add the current tree to the Seq that we will return
     qrTreeSeq.append((numParts, qrTree))
 
+    // Now run a loop that will create levels of the tree, halved in size in each iteration.
     while (numParts > 1) {
       qrTree = qrTree.map(x => ((x._1/2.0).toInt, (x._1, x._2))).reduceByKey(
         numPartitions=math.ceil(numParts/2.0).toInt,
         func=reduceYTR(_, _)).map(x => (x._1, x._2._2))
       numParts = math.ceil(numParts/2.0).toInt
+      // NOTE(shivaram): The reduceByKey operation is eager, so this should be safe
       qrTreeSeq.append((numParts, qrTree))
     }
     val r = qrTree.map(x => x._2._3).collect()(0)
+
+    // TODO: We should save R here for verfication ?
+    
+    // TODO: Print out the number of partitions or blocks at each level of the tree.
     (qrTreeSeq, r)
   }
 
