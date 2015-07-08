@@ -90,8 +90,8 @@ class TSQR extends RowPartitionedSolver with Logging with Serializable {
       Iterator((x._1 * 2, x._2),
                (x._1 * 2 + 1, x._2))
     }
-    qrRevTree.cache()
-    qrRevTree.count()
+    //qrRevTree.cache()
+    //qrRevTree.count()
 
     //val prevTree: RDD[(Int, DenseMatrix[Double])] = qrRevTree
     //prevTree.count()
@@ -160,8 +160,8 @@ class TSQR extends RowPartitionedSolver with Logging with Serializable {
       //qrRevTree.cache()
       //qrRevTree.count()
     }
-    qrRevTree.cache()
-    qrRevTree.count()
+    //qrRevTree.cache()
+    //qrRevTree.count()
 
     (RowPartitionedMatrix.fromMatrix(qrRevTree.map(x => x._2)), r)
   }

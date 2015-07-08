@@ -111,6 +111,8 @@ object CheckQR extends Logging with Serializable {
 
 
     val (q, r) = new TSQR().qrQR(train)
+    q.cache()
+    q.rdd.count()
     //csvwrite(new File("A"), train.collect())
     //csvwrite( new File("Q"), q.collect())
     //csvwrite( new File("R"), r)
