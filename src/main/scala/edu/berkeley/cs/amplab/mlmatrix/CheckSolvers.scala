@@ -65,45 +65,62 @@ object CheckSolvers extends Logging with Serializable {
     }
 
     val fileRDD= sc.textFile(filename, parts).map(line=>line.split(",")).cache()
-    val trainRDD = fileRDD.map(part=> part(0).split(" ").map(a=>a.toDouble)).cache()
-    val bClasses = fileRDD.map(part => part(1).toInt).cache()
+    val trainRDD = fileRDD.map(part=> part(0).split(" ").map(a=>a.toDouble))
+    val trainClasses = fileRDD.map(part => part(1).toInt)
     // Create matrix of +1/-1s given class labels
     // Assume classId is integer in [1,1000]
-    val bRDD = bClasses.map { classId =>
+    val trainBRDD = trainClasses.map { classId =>
       val classes = Array.fill[Double](1000)(-1)
       classes(classId-1) = 1
       classes
     }
-    val trainZipped = trainRDD.zip(bRDD).repartition(parts).cache()
+    val testRDD = fileRDD.map(part=> part(2).split(" ").map(a=>a.toDouble))
+    val testLabelsRDD = fileRDD.map(part=>Array(part(3).toInt))
+    val trainZipped = trainRDD.zip(trainBRDD).repartition(parts)
+    val testZipped = testRDD.zip(testLabelsRDD).repartition(parts)
     trainZipped.count
+    testZipped.count
     val train = RowPartitionedMatrix.fromArray(trainZipped.map(p=>p._1)).cache()
-    val b = RowPartitionedMatrix.fromArray(trainZipped.map(p=>p._2)).cache()
-
+    val trainB = RowPartitionedMatrix.fromArray(trainZipped.map(p=>p._2)).cache()
+    val test = RowPartitionedMatrix.fromArray(testZipped.map(p=>p._1)).cache()
+    val testLabels = testZipped.map(p=>p._2)
     train.rdd.count
-    b.rdd.count
+    trainB.rdd.count
     trainZipped.unpersist()
+    test.rdd.count
+    testLabels.count
+    testZipped.unpersist()
 
-    val x: DenseMatrix[Double] = solver.toLowerCase match {
+    val x= solver.toLowerCase match {
       case "normal" =>
-        new NormalEquations().solveLeastSquaresWithL2(train, b, lambda)
+        new NormalEquations().solveLeastSquaresWithL2(train, trainB, lambda)
       case "tsqr" =>
-        new TSQR().solveLeastSquaresWithL2(train, b, lambda)
+        new TSQR().solveLeastSquaresWithL2(train, trainB, lambda)
       case _ =>
         logError("Invalid Solver ")
         logError("Using Normal Equations")
-        new NormalEquations().solveLeastSquaresWithL2(train, b, lambda)
+        new NormalEquations().solveLeastSquaresWithL2(train, trainB, lambda)
     }
 
     // Record normA, normB, normX, norm(AX-B), norm(AX-B) + lambda*norm(X)
-    val residual = Utils.computeResidualNorm(train, b, x)
+    val residual = Utils.computeResidualNorm(train, trainB, x)
     val normA = train.normFrobenius()
-    val normB = b.normFrobenius()
+    val normB = trainB.normFrobenius()
     val normX = norm(x.toDenseVector)
     val residualWithRegularization = residual*residual+lambda*normX*normX
+    println("Rows of train:  " + train.numRows())
+    println("Columns of train " + train.numCols())
     println("Residual: " + residual)
     println("normA: " + normA)
     println("normB: " + normB)
     println("normX: " + normX)
     println("residualWithRegularization: " + residualWithRegularization)
+
+
+    // Test error
+    val testError = Utils.calcTestErr(test, x, testLabels, 5)
+    println("Rows of test " + test.numRows())
+    println("Cols of test " + test.numCols())
+    println("Got a test error of" + testError)
   }
 }
