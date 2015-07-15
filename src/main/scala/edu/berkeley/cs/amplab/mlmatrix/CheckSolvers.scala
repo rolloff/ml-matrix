@@ -52,21 +52,24 @@ object CheckSolvers extends Logging with Serializable {
       .setJars(SparkContext.jarOfClass(this.getClass).toSeq)
     val sc = new SparkContext(conf)
 
-    var filename = directory
+    var trainFilename = directory
+    var testFilename = directory
     dataset.toLowerCase match {
       case "imagenet-fv-4k" =>
         //trainFilename += "imagenet-fv-4k-trainFeatures"
         //bFilename += "imagenet-fv-4k-trainLabels"
-        filename += "imagenet-fv-4k-trainAll.txt"
+        trainFilename += "imagenet-fv-4k-trainAll.txt"
+        testFilename += "imagenet-fv-4k-testAll.txt"
       case _ =>
         logError("Invalid dataset")
         logError("Using imagenet-fv-4k")
-        filename += "imagenet-fv-4k-trainAll.txt"
+        trainFilename += "imagenet-fv-4k-trainAll.txt"
+        testFilename += "imagenet-fv-4k-testAll.txt"
     }
 
-    val fileRDD= sc.textFile(filename, parts).map(line=>line.split(",")).cache()
-    val trainRDD = fileRDD.map(part=> part(0).split(" ").map(a=>a.toDouble))
-    val trainClasses = fileRDD.map(part => part(1).toInt)
+    val trainFileRDD= sc.textFile(trainFilename, parts).map(line=>line.split(",")).cache()
+    val trainRDD = trainFileRDD.map(part=> part(0).split(" ").map(a=>a.toDouble))
+    val trainClasses = trainFileRDD.map(part => part(1).toInt)
     // Create matrix of +1/-1s given class labels
     // Assume classId is integer in [1,1000]
     val trainBRDD = trainClasses.map { classId =>
@@ -74,8 +77,12 @@ object CheckSolvers extends Logging with Serializable {
       classes(classId-1) = 1
       classes
     }
-    val testRDD = fileRDD.map(part=> part(2).split(" ").map(a=>a.toDouble))
-    val testLabelsRDD = fileRDD.map(part=>Array(part(3).toInt))
+
+    val testFileRDD = sc.textFile(testFilename, parts).map(line=>line.split(",")).cache()
+    val testRDD = testFileRDD.map(part=> part(0).split(" ").map(a=>a.toDouble))
+    val testLabelsRDD = testFileRDD.map(part=>Array(part(1).toInt))
+
+
     val trainZipped = trainRDD.zip(trainBRDD).repartition(parts)
     val testZipped = testRDD.zip(testLabelsRDD).repartition(parts)
     trainZipped.count
