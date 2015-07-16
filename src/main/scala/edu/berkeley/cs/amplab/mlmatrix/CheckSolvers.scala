@@ -80,16 +80,16 @@ object CheckSolvers extends Logging with Serializable {
 
     val testFileRDD = sc.textFile(testFilename, parts).map(line=>line.split(",")).cache()
     val testRDD = testFileRDD.map(part=> part(0).split(" ").map(a=>a.toDouble))
-    val testLabelsRDD = testFileRDD.map(part=>Array(part(1).toInt))
+    val testLabelsRDD = testFileRDD.map(part=>Array(part(1).toInt - 1))
 
 
     val trainZipped = trainRDD.zip(trainBRDD).repartition(parts)
     val testZipped = testRDD.zip(testLabelsRDD).repartition(parts)
     trainZipped.count
     testZipped.count
-    val train = RowPartitionedMatrix.fromArray(trainZipped.map(p=>p._1)).cache()
-    val trainB = RowPartitionedMatrix.fromArray(trainZipped.map(p=>p._2)).cache()
-    val test = RowPartitionedMatrix.fromArray(testZipped.map(p=>p._1)).cache()
+    var train = RowPartitionedMatrix.fromArray(trainZipped.map(p=>p._1)).cache()
+    var trainB = RowPartitionedMatrix.fromArray(trainZipped.map(p=>p._2)).cache()
+    var test = RowPartitionedMatrix.fromArray(testZipped.map(p=>p._1)).cache()
     val testLabels = testZipped.map(p=>p._2)
     train.rdd.count
     trainB.rdd.count
@@ -97,6 +97,15 @@ object CheckSolvers extends Logging with Serializable {
     test.rdd.count
     testLabels.count
     testZipped.unpersist()
+
+    // Compute means
+    val trainMeans = (train.reduceColElements(_+_).collect()).toDenseVector :* (1/ train.numRows().toDouble)
+    val trainBMeans = (trainB.reduceColElements(_+_).collect()).toDenseVector :* (1/ trainB.numRows().toDouble)
+    // Subtract trainMeans from each row of matrix
+    train = train.mapPartitions(part=> part(*,::)-trainMeans)
+    trainB = trainB.mapPartitions(part=> part(*, ::)-trainBMeans)
+
+
 
     val x= solver.toLowerCase match {
       case "normal" =>
@@ -124,10 +133,28 @@ object CheckSolvers extends Logging with Serializable {
     println("residualWithRegularization: " + residualWithRegularization)
 
 
-    // Test error
-    val testError = Utils.calcTestErr(test, x, testLabels, 5)
+    // lambda = 4e-5
+    // A' = Test Features - trainFeatureMeans
+    // A'xComputed
+    // A'xComputed + trainLabelMeans
+    //Test accuracy should be 45.9%
+
+    test = test.mapPartitions(part=>part(*,::)-trainMeans)
+
+
+    val numTestImages = test.numRows().toInt
+    val xBroadcast = test.rdd.context.broadcast(x)
+    var prediction = test.mapPartitions(mat => mat * xBroadcast.value)
+    prediction = prediction.mapPartitions(part=>part(*,::) + trainBMeans)
+
+    val predictionArray = prediction.rdd.map(p=>p.mat).flatMap { p =>
+      p.data.grouped(p.rows).toSeq.transpose.map(y => y.toArray)
+    }
+    val predictedLabels = Utils.topKClassifier(5, predictionArray)
+    val errPercent = Utils.getErrPercent(predictedLabels, testLabels, numTestImages)
+
     println("Rows of test " + test.numRows())
     println("Cols of test " + test.numCols())
-    println("Got a test error of" + testError)
+    println("Got a test error of" + errPercent)
   }
 }
