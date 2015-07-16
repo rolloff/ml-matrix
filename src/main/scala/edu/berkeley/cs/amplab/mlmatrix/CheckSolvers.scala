@@ -77,14 +77,16 @@ object CheckSolvers extends Logging with Serializable {
       classes(classId-1) = 1
       classes
     }
+    trainFileRDD.unpersist()
 
     val testFileRDD = sc.textFile(testFilename, parts).map(line=>line.split(",")).cache()
     val testRDD = testFileRDD.map(part=> part(0).split(" ").map(a=>a.toDouble))
     val testLabelsRDD = testFileRDD.map(part=>Array(part(1).toInt - 1))
+    testFileRDD.unpersist()
 
 
-    val trainZipped = trainRDD.zip(trainBRDD).repartition(parts)
-    val testZipped = testRDD.zip(testLabelsRDD).repartition(parts)
+    val trainZipped = trainRDD.zip(trainBRDD).cache()
+    val testZipped = testRDD.zip(testLabelsRDD).cache()
     trainZipped.count
     testZipped.count
     var train = RowPartitionedMatrix.fromArray(trainZipped.map(p=>p._1)).cache()
@@ -120,17 +122,17 @@ object CheckSolvers extends Logging with Serializable {
 
     // Record normA, normB, normX, norm(AX-B), norm(AX-B) + lambda*norm(X)
     val residual = Utils.computeResidualNorm(train, trainB, x)
-    val normA = train.normFrobenius()
-    val normB = trainB.normFrobenius()
+    //val normA = train.normFrobenius()
+    //val normB = trainB.normFrobenius()
     val normX = norm(x.toDenseVector)
     val residualWithRegularization = residual*residual+lambda*normX*normX
-    println("Rows of train:  " + train.numRows())
-    println("Columns of train " + train.numCols())
+    //println("Rows of train:  " + train.numRows())
+    //println("Columns of train " + train.numCols())
     println("Residual: " + residual)
-    println("normA: " + normA)
-    println("normB: " + normB)
+    //println("normA: " + normA)
+    //println("normB: " + normB)
     println("normX: " + normX)
-    println("residualWithRegularization: " + residualWithRegularization)
+    println("residualWithRegularization: " + math.sqrt(residualWithRegularization))
 
 
     // lambda = 4e-5
@@ -140,7 +142,8 @@ object CheckSolvers extends Logging with Serializable {
     //Test accuracy should be 45.9%
 
     test = test.mapPartitions(part=>part(*,::)-trainMeans)
-
+    
+    //println("NormTest (centralized): " + test.normFrobenius())
 
     val numTestImages = test.numRows().toInt
     val xBroadcast = test.rdd.context.broadcast(x)
@@ -153,8 +156,8 @@ object CheckSolvers extends Logging with Serializable {
     val predictedLabels = Utils.topKClassifier(5, predictionArray)
     val errPercent = Utils.getErrPercent(predictedLabels, testLabels, numTestImages)
 
-    println("Rows of test " + test.numRows())
-    println("Cols of test " + test.numCols())
-    println("Got a test error of" + errPercent)
+    //println("Rows of test " + test.numRows())
+    //println("Cols of test " + test.numCols())
+    println("TestError: " + errPercent)
   }
 }
