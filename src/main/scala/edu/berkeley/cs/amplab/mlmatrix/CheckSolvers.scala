@@ -69,6 +69,20 @@ object CheckSolvers extends Logging with Serializable {
 
     val trainFileRDD= sc.textFile(trainFilename, parts).map(line=>line.split(",")).cache()
     val trainRDD = trainFileRDD.map(part=> part(0).split(" ").map(a=>a.toDouble))
+    var train = RowPartitionedMatrix.fromArray(trainRDD).cache()
+
+    val R = train.qrR()
+    val lambdas = Seq(0.000025, 0.00005, 0.000075, 0.0001, 0.001, 0.01, 0.1)
+    lambdas.map { lambda =>
+      val gamma = DenseMatrix.eye[Double](R.rows) :* math.sqrt(lambda)
+      val Rgamma = DenseMatrix.vertcat(R, gamma)
+      val svd.SVD(u,s,v) = svd(Rgamma)
+      println("Lambda: " + lambda + "Cond: " + s(0)/s(R.rows-1) )
+    }
+
+
+    /*
+
     val trainClasses = trainFileRDD.map(part => part(1).toInt)
     // Create matrix of +1/-1s given class labels
     // Assume classId is integer in [1,1000]
@@ -142,7 +156,7 @@ object CheckSolvers extends Logging with Serializable {
     //Test accuracy should be 45.9%
 
     test = test.mapPartitions(part=>part(*,::)-trainMeans)
-    
+
     //println("NormTest (centralized): " + test.normFrobenius())
 
     val numTestImages = test.numRows().toInt
@@ -159,5 +173,6 @@ object CheckSolvers extends Logging with Serializable {
     //println("Rows of test " + test.numRows())
     //println("Cols of test " + test.numCols())
     println("TestError: " + errPercent)
+    */
   }
 }
